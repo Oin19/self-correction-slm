@@ -1,0 +1,16 @@
+torch
+transformers
+accelerate
+datasets
+trl
+peft
+bitsandbytes
+scipy
+numpy
+pandas
+matplotlib
+pyyaml
+tqdm
+pytest
+jupyter
+ipykernel
