@@ -1,0 +1,4 @@
+model_name: Qwen/Qwen2.5-Coder-1.5B-Instruct
+max_new_tokens: 1024
+temperature: 0.2
+top_p: 0.95

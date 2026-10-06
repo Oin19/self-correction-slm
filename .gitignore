@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and generated outputs
+results/
+output*.md
+*.csv
+*.json
+*.log
+
+# Model checkpoints and caches
+checkpoints/*/
+*.safetensors
+*.bin
+*.pt
+*.pth
+.cache/
+huggingface/
+wandb/
+
+# Secrets
+.env
+*.key
+*.pem
