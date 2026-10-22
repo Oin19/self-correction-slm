@@ -159,26 +159,15 @@ def run_dpo_training(
     """Run Direct Preference Optimization (DPO) training."""
     _apply_trl_transformers_compat_shims()
     try:
+        from transformers import Trainer
         from trl import DPOConfig, DPOTrainer
     except ImportError as e:
         raise ImportError(f"TRL library is required for DPO training. Install with `pip install trl`: {e}")
 
-    # Patch DPOTrainer.get_batch_samples for transformers >= 4.48 (passes args.device as 3rd arg)
-    try:
-        if not getattr(DPOTrainer.get_batch_samples, "_trl_compat_patched", False):
-            orig_gbs = DPOTrainer.get_batch_samples
-            sig_gbs = inspect.signature(orig_gbs)
-            if len(sig_gbs.parameters) == 3 and not any(
-                p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig_gbs.parameters.values()
-            ):
-
-                def _patched_get_batch_samples(self, epoch_iterator, num_batches, *args, _orig=orig_gbs, **kwargs):
-                    return _orig(self, epoch_iterator, num_batches)
-
-                _patched_get_batch_samples._trl_compat_patched = True
-                DPOTrainer.get_batch_samples = _patched_get_batch_samples
-    except Exception:
-        pass
+    # In trl<0.12, DPOTrainer.get_batch_samples(self, model, batch) was an eval generation helper
+    # that collides with transformers>=4.46 Trainer.get_batch_samples(self, epoch_iterator, num_batches, device).
+    if hasattr(Trainer, "get_batch_samples"):
+        DPOTrainer.get_batch_samples = Trainer.get_batch_samples
 
     # Patch DPOTrainer.compute_loss for transformers >= 4.46 num_items_in_batch kwarg
     try:
