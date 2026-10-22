@@ -28,17 +28,17 @@ def _apply_trl_transformers_compat_shims() -> None:
     try:
         from transformers import Trainer
 
-        orig_init = Trainer.__init__
-        if not getattr(orig_init, "_trl_compat_patched", False):
+        if not getattr(Trainer.__init__, "_trl_compat_patched", False):
+            orig_init = Trainer.__init__
             sig = inspect.signature(orig_init)
             if "tokenizer" not in sig.parameters and "processing_class" in sig.parameters:
 
-                def _patched_trainer_init(self, *args, **kwargs):
+                def _patched_trainer_init(self, *args, _orig=orig_init, **kwargs):
                     if "tokenizer" in kwargs and "processing_class" not in kwargs:
                         kwargs["processing_class"] = kwargs.pop("tokenizer")
                     elif "tokenizer" in kwargs:
                         kwargs.pop("tokenizer")
-                    return orig_init(self, *args, **kwargs)
+                    return _orig(self, *args, **kwargs)
 
                 _patched_trainer_init._trl_compat_patched = True
                 Trainer.__init__ = _patched_trainer_init
@@ -165,15 +165,15 @@ def run_dpo_training(
 
     # Patch DPOTrainer.get_batch_samples for transformers >= 4.48 (passes args.device as 3rd arg)
     try:
-        orig_gbs = DPOTrainer.get_batch_samples
-        if not getattr(orig_gbs, "_trl_compat_patched", False):
+        if not getattr(DPOTrainer.get_batch_samples, "_trl_compat_patched", False):
+            orig_gbs = DPOTrainer.get_batch_samples
             sig_gbs = inspect.signature(orig_gbs)
             if len(sig_gbs.parameters) == 3 and not any(
                 p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig_gbs.parameters.values()
             ):
 
-                def _patched_get_batch_samples(self, epoch_iterator, num_batches, *args, **kwargs):
-                    return orig_gbs(self, epoch_iterator, num_batches)
+                def _patched_get_batch_samples(self, epoch_iterator, num_batches, *args, _orig=orig_gbs, **kwargs):
+                    return _orig(self, epoch_iterator, num_batches)
 
                 _patched_get_batch_samples._trl_compat_patched = True
                 DPOTrainer.get_batch_samples = _patched_get_batch_samples
@@ -182,15 +182,17 @@ def run_dpo_training(
 
     # Patch DPOTrainer.compute_loss for transformers >= 4.46 num_items_in_batch kwarg
     try:
-        orig_compute_loss = DPOTrainer.compute_loss
-        if not getattr(orig_compute_loss, "_trl_compat_patched", False):
+        if not getattr(DPOTrainer.compute_loss, "_trl_compat_patched", False):
+            orig_compute_loss = DPOTrainer.compute_loss
             sig = inspect.signature(orig_compute_loss)
             if "num_items_in_batch" not in sig.parameters and not any(
                 p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
             ):
 
-                def _patched_compute_loss(self, model, inputs, return_outputs=False, *args, **kwargs):
-                    return orig_compute_loss(self, model, inputs, return_outputs=return_outputs)
+                def _patched_compute_loss(
+                    self, model, inputs, return_outputs=False, *args, _orig=orig_compute_loss, **kwargs
+                ):
+                    return _orig(self, model, inputs, return_outputs=return_outputs)
 
                 _patched_compute_loss._trl_compat_patched = True
                 DPOTrainer.compute_loss = _patched_compute_loss
