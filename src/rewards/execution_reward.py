@@ -1,6 +1,6 @@
 """Execution-guided reward functions."""
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 from src.execution.executor import ExecutionResult
 from src.execution.status import ExecutionStatus
 
@@ -106,3 +106,32 @@ def compute_status_aware_reward(
 
     return status_weights.get(status, -0.2)
 
+
+def generate_reward_audit_table() -> List[Dict[str, Any]]:
+    """Generate canonical reward audit table comparing dense vs binary rewards across all execution outcomes."""
+    cases = [
+        {"case": "Full Pass (AC)", "status": ExecutionStatus.AC, "passed": 5, "total": 5, "desc": "All test assertions pass"},
+        {"case": "Partial WA (High)", "status": ExecutionStatus.WA, "passed": 4, "total": 5, "desc": "80% assertions pass"},
+        {"case": "Partial WA (Low)", "status": ExecutionStatus.WA, "passed": 1, "total": 5, "desc": "20% assertions pass"},
+        {"case": "Zero-Pass WA", "status": ExecutionStatus.WA, "passed": 0, "total": 5, "desc": "Zero assertions pass"},
+        {"case": "Partial TLE", "status": ExecutionStatus.TLE, "passed": 3, "total": 5, "desc": "Timeout after passing 3/5 tests"},
+        {"case": "Zero-Pass TLE", "status": ExecutionStatus.TLE, "passed": 0, "total": 5, "desc": "Timeout before passing any tests"},
+        {"case": "Partial RE", "status": ExecutionStatus.RE, "passed": 2, "total": 5, "desc": "Runtime crash after passing 2/5 tests"},
+        {"case": "Zero-Pass RE", "status": ExecutionStatus.RE, "passed": 0, "total": 5, "desc": "Runtime crash on first test"},
+        {"case": "Compilation Error (CE)", "status": ExecutionStatus.CE, "passed": 0, "total": 5, "desc": "Syntax or Indentation Error"},
+    ]
+    audit_rows = []
+    for c in cases:
+        res = ExecutionResult(status=c["status"], passed_tests=c["passed"], total_tests=c["total"])
+        dense_rew = score_rollout_reward(res, reward_mode="dense")
+        binary_rew = score_rollout_reward(res, reward_mode="binary")
+        audit_rows.append({
+            "outcome": c["case"],
+            "status": c["status"],
+            "passed": c["passed"],
+            "total": c["total"],
+            "dense_reward": dense_rew,
+            "binary_reward": binary_rew,
+            "description": c["desc"],
+        })
+    return audit_rows

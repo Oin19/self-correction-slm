@@ -4,7 +4,7 @@ import unittest
 
 from src.execution.executor import ExecutionResult, PythonSandbox
 from src.execution.status import ExecutionStatus
-from src.rewards.execution_reward import score_rollout_reward
+from src.rewards.execution_reward import generate_reward_audit_table, score_rollout_reward
 from src.training.dpo import parse_apps_test_cases
 from src.utils.repro import set_global_seed
 from src.utils.test_cases import normalize_tests
@@ -42,6 +42,22 @@ class TestRewardModes(unittest.TestCase):
         binary = score_rollout_reward(result.to_dict(), "binary")
         self.assertAlmostEqual(dense, 0.5)
         self.assertEqual(binary, 0.0)
+
+    def test_reward_audit_table_completeness(self):
+        table = generate_reward_audit_table()
+        self.assertTrue(len(table) >= 8)
+        # Verify AC has dense 1.0 and binary 1.0
+        ac_row = next(r for r in table if r["status"] == ExecutionStatus.AC)
+        self.assertEqual(ac_row["dense_reward"], 1.0)
+        self.assertEqual(ac_row["binary_reward"], 1.0)
+        # Verify partial WA has positive dense reward and zero binary reward
+        partial_wa = next(r for r in table if r["status"] == ExecutionStatus.WA and r["passed"] > 0)
+        self.assertTrue(partial_wa["dense_reward"] > 0.0)
+        self.assertEqual(partial_wa["binary_reward"], 0.0)
+        # Verify CE has penalty dense and zero binary
+        ce_row = next(r for r in table if r["status"] == ExecutionStatus.CE)
+        self.assertEqual(ce_row["dense_reward"], -0.2)
+        self.assertEqual(ce_row["binary_reward"], 0.0)
 
 
 class TestDpoHarnessAlignment(unittest.TestCase):

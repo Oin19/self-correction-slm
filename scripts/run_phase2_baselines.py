@@ -45,7 +45,10 @@ def run_all_baselines(
         datasets_map["humaneval"] = load_dataset("openai_humaneval", split="test")
     if "mbpp" in benchmarks:
         print("Loading MBPP test split...", flush=True)
-        datasets_map["mbpp"] = load_dataset("google-research-datasets/mbpp", "sanitized", split="test")
+        try:
+            datasets_map["mbpp"] = load_dataset("google-research-datasets/mbpp", "sanitized", split="test")
+        except Exception:
+            datasets_map["mbpp"] = load_dataset("mbpp", split="test")
     if "apps" in benchmarks:
         print(f"Loading held-out APPS split {APPS_HELD_OUT_SPLIT}...", flush=True)
         datasets_map["apps"] = load_dataset("codeparrot/apps", split=APPS_HELD_OUT_SPLIT)

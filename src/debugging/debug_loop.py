@@ -231,14 +231,21 @@ class DebugLoop:
         model_fn: Callable[[str], str],
         initial_code: Optional[str] = None,
     ) -> Dict[str, Any]:
-        history, current_code, last_exec = [], initial_code, None
+        history = []
+        current_code = initial_code
+        last_exec: Optional[ExecutionResult] = None
         solved, solved_turn = False, None
+
         for turn_idx in range(1, self.max_turns + 1):
-            if current_code is None:
+            if turn_idx == 1 and current_code is not None:
+                prompt = self.build_initial_prompt(problem_description)
+            elif turn_idx == 1:
                 prompt = self.build_initial_prompt(problem_description)
                 current_code = extract_code_block(model_fn(prompt))
             else:
                 prompt = self.build_turn_prompt(problem_description, current_code, last_exec)
+                current_code = extract_code_block(model_fn(prompt))
+
             exec_res = self.sandbox.run_tests(current_code, test_cases)
             last_exec = exec_res
             history.append({
@@ -252,10 +259,7 @@ class DebugLoop:
             if exec_res.status == ExecutionStatus.AC:
                 solved, solved_turn = True, turn_idx
                 break
-            if turn_idx < self.max_turns:
-                current_code = extract_code_block(
-                    model_fn(self.build_turn_prompt(problem_description, current_code, exec_res))
-                )
+
         return {
             "solved": solved,
             "solved_turn": solved_turn,

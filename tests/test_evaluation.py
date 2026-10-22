@@ -1,13 +1,25 @@
 """Tests for evaluation metrics (Pass@1, Fix@K, error distribution, recovery rate)."""
 
+import json
+import os
+import tempfile
 import unittest
+
+from src.debugging.debug_loop import format_feedback
 from src.evaluation.metrics import (
-    calculate_pass_at_1,
-    calculate_fix_at_k,
+    calculate_conditional_repair,
+    calculate_cumulative_success,
     calculate_error_distribution,
+    calculate_fix_at_k,
+    calculate_mean_repair_turn,
+    calculate_pass_at_1,
     calculate_recovery_rate,
+    compute_bootstrap_ci,
+    evaluate,
+    mcnemar_test,
     summarize_eval_metrics,
 )
+from src.execution.executor import ExecutionResult
 
 
 class TestEvaluation(unittest.TestCase):
@@ -51,8 +63,6 @@ class TestEvaluation(unittest.TestCase):
         self.assertEqual(calculate_recovery_rate(sessions), 0.5)
 
     def test_feedback_modes_formatting(self):
-        from src.debugging.debug_loop import format_feedback
-        from src.execution.executor import ExecutionResult
         res = ExecutionResult(
             status="WA",
             passed_tests=2,
@@ -75,9 +85,6 @@ class TestEvaluation(unittest.TestCase):
         self.assertIn("Passed Tests: 2 / 5 (40.0%)", f3)
 
     def test_evaluate_streaming_jsonl_and_metrics(self):
-        import tempfile, json
-        from src.evaluation.metrics import evaluate
-
         # Mock debug loop function
         def mock_debug_loop(model, tokenizer, problem, test_cases=None, K=3, **kwargs):
             if "fail" in problem:
@@ -128,7 +135,6 @@ class TestEvaluation(unittest.TestCase):
             self.assertTrue(lines[1]["conditional_repair_at_3"])
 
     def test_bootstrap_ci(self):
-        from src.evaluation.metrics import compute_bootstrap_ci
         data = [1.0] * 50 + [0.0] * 50
         mean, lower, upper = compute_bootstrap_ci(data, num_samples=500, ci=0.95)
         self.assertAlmostEqual(mean, 0.5)
@@ -136,7 +142,6 @@ class TestEvaluation(unittest.TestCase):
         self.assertTrue(0.5 < upper < 0.65)
 
     def test_mcnemar_test(self):
-        from src.evaluation.metrics import mcnemar_test
         base = [True] * 50 + [False] * 50
         treatment = [True] * 80 + [False] * 20
         res = mcnemar_test(base, treatment)
