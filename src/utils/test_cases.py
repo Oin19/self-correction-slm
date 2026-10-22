@@ -114,7 +114,13 @@ def normalize_tests(ex: dict) -> list:
             sources.append(tl)
 
     if isinstance(ex.get("test"), str) and ex["test"].strip():
-        sources.append([ex["test"]])
+        test_str = ex["test"].strip()
+        entry_point = ex.get("entry_point")
+        if isinstance(entry_point, str) and entry_point.strip():
+            check_call = f"check({entry_point.strip()})"
+            if "def check(" in test_str and check_call not in test_str:
+                test_str = f"{test_str}\n\n{check_call}\n"
+        sources.append([test_str])
 
     if not sources:
         return []

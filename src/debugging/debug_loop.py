@@ -1,6 +1,7 @@
 """Iterative execution-feedback debugging loop."""
 
 import random
+import re
 import torch
 from typing import Any, Callable, Dict, List, Optional
 
@@ -10,11 +11,43 @@ from src.models.generation import extract_code_block
 from src.rewards.execution_reward import compute_partial_reward
 
 
-def build_prompt(problem: str, prev_code: str = None, traceback: str = None) -> str:
-    if prev_code is None:
+def sanitize_feedback_text(text: str, max_chars: int = 512) -> str:
+    """Sanitize traceback/error text so hidden oracle expected values are not leaked."""
+    if not text:
+        return ""
+    sanitized = re.sub(r"expected=.*?(?=\s+actual=|$)", "expected=<REDACTED>", text)
+    sanitized = re.sub(r"Expected\s+.*?(?=,\s+got\s+)", "Expected <REDACTED>", sanitized)
+    return sanitized[:max_chars]
+
+
+def format_feedback_by_mode(result: ExecutionResult, feedback_mode: str = "F2", max_chars: int = 512) -> str:
+    """Format execution feedback according to F0/F1/F2/F3 granularity modes."""
+    mode = (feedback_mode or "F2").upper()
+    if mode == "F0":
+        return ""
+    if mode == "F1":
+        return f"Execution Status: {result.status}"
+    raw_err = result.traceback or result.stderr or result.stdout or ""
+    sanitized_err = sanitize_feedback_text(raw_err, max_chars=max_chars)
+    if mode == "F2":
+        return sanitized_err or f"Execution Status: {result.status}"
+    if mode == "F3":
+        parts = [f"Execution Status: {result.status}"]
+        if result.total_tests > 0:
+            parts.append(f"Passed {result.passed_tests} / {result.total_tests} feedback checks.")
+        if sanitized_err:
+            parts.append(f"Diagnostic:\n{sanitized_err}")
+        return "\n".join(parts)[:max_chars]
+    return sanitized_err
+
+
+def build_prompt(problem: str, prev_code: str = None, traceback: str = None, feedback_mode: str = "F2") -> str:
+    if prev_code is None or (feedback_mode and feedback_mode.upper() == "F0"):
         return f"### Problem:\n{problem}\n\n### Write a Python solution:\n```python"
-    return (f"### Problem:\n{problem}\n\n### Your previous code:\n```python\n{prev_code}\n```\n\n"
-            f"### Error you received:\n{(traceback or '')[:512]}\n\n### Fixed version:\n```python")
+    return (
+        f"### Problem:\n{problem}\n\n### Your previous code:\n```python\n{prev_code}\n```\n\n"
+        f"### Error you received:\n{(traceback or '')[:512]}\n\n### Fixed version:\n```python"
+    )
 
 
 def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None) -> ExecutionResult:
@@ -24,14 +57,27 @@ def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = Non
         return ExecutionResult("CE", 0, 0, traceback="No executable test cases supplied.")
     if all(isinstance(t, str) for t in test_cases):
         r = run_code(code + "\n\n" + "\n\n".join(test_cases))
-        return ExecutionResult(r["status"], 1 if r["status"] == "AC" else 0, 1,
-                               stdout=r.get("output", ""), traceback=r.get("traceback", ""))
+        return ExecutionResult(
+            r["status"],
+            1 if r["status"] == "AC" else 0,
+            1,
+            stdout=r.get("output", ""),
+            traceback=r.get("traceback", ""),
+        )
     return sandbox.run_tests(code, test_cases)
 
 
-def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, K: int = 3,
-                       initial_code: str = None, max_gen_time: Optional[float] = None) -> list:
-    """Run up to K turns; every retry receives real execution feedback.
+def agentic_debug_loop(
+    model,
+    tokenizer,
+    problem: str,
+    test_cases: list = None,
+    K: int = 3,
+    initial_code: str = None,
+    max_gen_time: Optional[float] = None,
+    feedback_mode: str = "F2",
+) -> list:
+    """Run up to K turns; every retry receives execution feedback under ``feedback_mode``.
 
     ``max_gen_time`` (seconds) caps each ``model.generate`` call (wall clock)
     so a wedged GPU/driver cannot hang the loop indefinitely.
@@ -43,7 +89,7 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
         if turn == 0 and code is not None:
             prompt = build_prompt(problem)
         else:
-            prompt = build_prompt(problem, code, error)
+            prompt = build_prompt(problem, code, error, feedback_mode=feedback_mode)
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
             gen_kwargs = {
                 "max_new_tokens": 512,
@@ -59,17 +105,34 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
             full = tokenizer.decode(output[0], skip_special_tokens=True)
             code = extract_code_block(full, prompt)
         result = _execute(code, tests, sandbox)
-        history.append({"turn": turn + 1, "prompt": prompt, "code": code, "result": result.to_dict()})
+        history.append(
+            {
+                "turn": turn + 1,
+                "prompt": prompt,
+                "code": code,
+                "feedback_mode": feedback_mode,
+                "result": result.to_dict(),
+            }
+        )
         if result.status == ExecutionStatus.AC:
             break
-        error = (result.traceback or result.stderr or result.stdout or "")[:512]
+        error = format_feedback_by_mode(result, feedback_mode=feedback_mode, max_chars=512)
     return history
+
+
+def agentic_loop_repeated_sampling(model, tokenizer, problem: str, test_cases: list = None, K: int = 3) -> list:
+    """B1 / F0 control: repeated sampling with no execution feedback under the same K & decoding budget."""
+    return agentic_debug_loop(model, tokenizer, problem, test_cases=test_cases, K=K, feedback_mode="F0")
 
 
 def agentic_loop_no_feedback(model, tokenizer, problem: str, test_cases: list = None, K: int = 3) -> list:
     """RQ2 control: random fake error context, but correctness is checked on real tests."""
     history, code = [], None
-    fake_errors = ['NameError: name "x" is not defined', "IndexError: list index out of range", "TypeError: unsupported operand type(s)"]
+    fake_errors = [
+        'NameError: name "x" is not defined',
+        "IndexError: list index out of range",
+        "TypeError: unsupported operand type(s)",
+    ]
     device = next(model.parameters()).device
     tests, sandbox = test_cases or [], PythonSandbox()
     for turn in range(K):
@@ -97,27 +160,50 @@ def format_execution_feedback(result: ExecutionResult) -> str:
     if result.status == ExecutionStatus.AC:
         return "All test cases PASSED successfully."
     feedback = [f"Execution Status: {result.status}"]
-    if result.traceback: feedback.append(f"Traceback / Error Details:\n{result.traceback}")
-    elif result.stderr: feedback.append(f"Error Output (stderr):\n{result.stderr}")
-    elif result.stdout: feedback.append(f"Output (stdout):\n{result.stdout}")
-    if result.total_tests > 0: feedback.append(f"Passed {result.passed_tests} / {result.total_tests} test cases.")
+    if result.traceback:
+        feedback.append(f"Traceback / Error Details:\n{result.traceback}")
+    elif result.stderr:
+        feedback.append(f"Error Output (stderr):\n{result.stderr}")
+    elif result.stdout:
+        feedback.append(f"Output (stdout):\n{result.stdout}")
+    if result.total_tests > 0:
+        feedback.append(f"Passed {result.passed_tests} / {result.total_tests} test cases.")
     return "\n".join(feedback)
 
 
 class DebugLoop:
     """Controls multi-turn debugging sessions."""
+
     def __init__(self, sandbox: Optional[PythonSandbox] = None, max_turns: int = 5, traceback_token_cap: int = 500):
-        self.sandbox, self.max_turns, self.traceback_token_cap = sandbox or PythonSandbox(), max_turns, traceback_token_cap
+        self.sandbox, self.max_turns, self.traceback_token_cap = (
+            sandbox or PythonSandbox(),
+            max_turns,
+            traceback_token_cap,
+        )
 
     def build_initial_prompt(self, problem_description: str) -> str:
-        return f"Solve the following programming problem in Python.\nProblem Statement:\n{problem_description}\n\nWrite clean, self-contained Python code wrapped in ```python ... ```."
+        return (
+            "Solve the following programming problem in Python.\nProblem Statement:\n"
+            f"{problem_description}\n\nWrite clean, self-contained Python code wrapped in ```python ... ```."
+        )
 
-    def build_turn_prompt(self, problem_description: str, previous_code: str, execution_result: ExecutionResult) -> str:
-        return (f"Problem Statement:\n{problem_description}\n\nPrevious solution failed execution.\n"
-                f"Previous Code:\n```python\n{previous_code}\n```\n\nExecution Feedback:\n{format_execution_feedback(execution_result)}\n\n"
-                "Identify the bug, correct the code, and provide the fixed Python solution wrapped in ```python ... ```." )
+    def build_turn_prompt(
+        self, problem_description: str, previous_code: str, execution_result: ExecutionResult
+    ) -> str:
+        return (
+            f"Problem Statement:\n{problem_description}\n\nPrevious solution failed execution.\n"
+            f"Previous Code:\n```python\n{previous_code}\n```\n\nExecution Feedback:\n"
+            f"{format_execution_feedback(execution_result)}\n\n"
+            "Identify the bug, correct the code, and provide the fixed Python solution wrapped in ```python ... ```."
+        )
 
-    def run_session(self, problem_description: str, test_cases: List[Dict[str, Any]], model_fn: Callable[[str], str], initial_code: Optional[str] = None) -> Dict[str, Any]:
+    def run_session(
+        self,
+        problem_description: str,
+        test_cases: List[Dict[str, Any]],
+        model_fn: Callable[[str], str],
+        initial_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
         history, current_code, last_exec = [], initial_code, None
         solved, solved_turn = False, None
         for turn_idx in range(1, self.max_turns + 1):
@@ -128,15 +214,29 @@ class DebugLoop:
                 prompt = self.build_turn_prompt(problem_description, current_code, last_exec)
             exec_res = self.sandbox.run_tests(current_code, test_cases)
             last_exec = exec_res
-            history.append({"turn": turn_idx, "prompt": prompt, "code": current_code,
-                            "execution_result": exec_res.to_dict(), "reward": compute_partial_reward(exec_res),
-                            "status": exec_res.status})
+            history.append(
+                {
+                    "turn": turn_idx,
+                    "prompt": prompt,
+                    "code": current_code,
+                    "execution_result": exec_res.to_dict(),
+                    "reward": compute_partial_reward(exec_res),
+                    "status": exec_res.status,
+                }
+            )
             if exec_res.status == ExecutionStatus.AC:
                 solved, solved_turn = True, turn_idx
                 break
             if turn_idx < self.max_turns:
-                current_code = extract_code_block(model_fn(self.build_turn_prompt(problem_description, current_code, exec_res)))
-        return {"solved": solved, "solved_turn": solved_turn, "total_turns": len(history),
-                "max_turns": self.max_turns, "history": history,
-                "final_status": history[-1]["status"] if history else "CE",
-                "final_reward": history[-1]["reward"] if history else -0.2}
+                current_code = extract_code_block(
+                    model_fn(self.build_turn_prompt(problem_description, current_code, exec_res))
+                )
+        return {
+            "solved": solved,
+            "solved_turn": solved_turn,
+            "total_turns": len(history),
+            "max_turns": self.max_turns,
+            "history": history,
+            "final_status": history[-1]["status"] if history else "CE",
+            "final_reward": history[-1]["reward"] if history else -0.2,
+        }
