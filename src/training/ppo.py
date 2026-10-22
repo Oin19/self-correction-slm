@@ -3,9 +3,9 @@ import gc, json, os
 import torch
 from peft import PeftModel
 from src.execution.executor import PythonSandbox
-from src.models.generation import extract_code_block
+from src.models.generation import build_prompt, extract_code_block
 from src.rewards.execution_reward import score_rollout_reward
-from src.utils.repro import git_commit_sha, set_global_seed
+from src.utils.repro import git_commit_sha, set_global_seed, write_run_manifest
 from src.utils.test_cases import normalize_tests
 from trl import PPOTrainer, PPOConfig
 from trl.models.modeling_value_head import AutoModelForCausalLMWithValueHead
@@ -105,7 +105,7 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir=None,num_epochs
         p=ex.get("question",ex.get("prompt",""))
         p_ids=tokenizer.encode(p,truncation=True,max_length=350)
         p_clean=tokenizer.decode(p_ids,skip_special_tokens=True)
-        prompt=f"### Problem:\n{p_clean}\n\n### Solution:\n```python\n"
+        prompt=build_prompt(p_clean)
         t=tokenizer(prompt,truncation=False)
         return {"input_ids":t["input_ids"],"benchmark_tests":normalize_tests(ex)}
     dataset=dataset.map(encode)
@@ -268,4 +268,26 @@ def run_ppo_training(sft_model_path,tokenizer,dataset,output_dir=None,num_epochs
             "trainable_parameters": trainable_count,
             "total_parameters": total_count,
         }, f, indent=2)
+    write_run_manifest(
+        output_dir=final_dir,
+        run_id=f"ppo_{reward_mode}_seed_{seed}",
+        model_name_or_path=base,
+        stage=f"ppo_{reward_mode}",
+        seed=seed,
+        hyperparameters={
+            "max_steps": max_steps,
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "mini_batch_size": mini_batch_size,
+            "gradient_accumulation_steps": gradient_accumulation_steps,
+            "init_kl_coef": init_kl_coef,
+            "target_kl": target_kl,
+            "trainable_parameters": trainable_count,
+            "total_parameters": total_count,
+        },
+        dataset_split="train[:1500]",
+        turn_budget_k=1,
+        reward_mode_or_loss=reward_mode,
+        parent_checkpoint=sft_model_path,
+    )
     return trainer

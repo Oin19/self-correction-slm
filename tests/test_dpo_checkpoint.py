@@ -78,7 +78,7 @@ class TestPreferencePairCheckpoint(unittest.TestCase):
         pairs = dpo_mod.make_preference_pairs(PROBLEMS, None, None, K=3, seed=42,
                                               checkpoint_path=self.ckpt, max_gen_time=90)
         self.assertEqual(len(pairs), 1)
-        self.assertEqual(pairs[0]["prompt"], "q0")
+        self.assertEqual(pairs[0]["prompt"], dpo_mod.build_prompt("q0"))
         self.assertEqual(pairs[0]["chosen"], "code_AC_1")
         self.assertEqual(pairs[0]["rejected"], "code_WA_0")
         entries = self._read_ckpt()
