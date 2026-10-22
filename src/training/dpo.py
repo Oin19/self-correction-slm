@@ -163,6 +163,23 @@ def run_dpo_training(
     except ImportError as e:
         raise ImportError(f"TRL library is required for DPO training. Install with `pip install trl`: {e}")
 
+    # Patch DPOTrainer.get_batch_samples for transformers >= 4.48 (passes args.device as 3rd arg)
+    try:
+        orig_gbs = DPOTrainer.get_batch_samples
+        if not getattr(orig_gbs, "_trl_compat_patched", False):
+            sig_gbs = inspect.signature(orig_gbs)
+            if len(sig_gbs.parameters) == 3 and not any(
+                p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig_gbs.parameters.values()
+            ):
+
+                def _patched_get_batch_samples(self, epoch_iterator, num_batches, *args, **kwargs):
+                    return orig_gbs(self, epoch_iterator, num_batches)
+
+                _patched_get_batch_samples._trl_compat_patched = True
+                DPOTrainer.get_batch_samples = _patched_get_batch_samples
+    except Exception:
+        pass
+
     # Patch DPOTrainer.compute_loss for transformers >= 4.46 num_items_in_batch kwarg
     try:
         orig_compute_loss = DPOTrainer.compute_loss
@@ -172,7 +189,7 @@ def run_dpo_training(
                 p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
             ):
 
-                def _patched_compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+                def _patched_compute_loss(self, model, inputs, return_outputs=False, *args, **kwargs):
                     return orig_compute_loss(self, model, inputs, return_outputs=return_outputs)
 
                 _patched_compute_loss._trl_compat_patched = True
