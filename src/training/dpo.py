@@ -5,7 +5,8 @@ import os
 from typing import TYPE_CHECKING, List, Optional
 
 from src.debugging.debug_loop import agentic_debug_loop
-from src.utils.repro import git_commit_sha, set_global_seed
+from src.models.generation import build_prompt
+from src.utils.repro import git_commit_sha, set_global_seed, write_run_manifest
 from src.utils.test_cases import normalize_tests
 
 if TYPE_CHECKING:
@@ -71,7 +72,7 @@ def make_preference_pairs(problems, model, tokenizer, K: int = 3, seed: int = 42
 
                 if ac_turns and bad_turns:
                     pair = {
-                        "prompt": question,
+                        "prompt": build_prompt(question),
                         "chosen": ac_turns[0]["code"],
                         "rejected": bad_turns[0]["code"],
                     }
@@ -184,4 +185,23 @@ def run_dpo_training(
             "preference_split": preference_split,
             "debug_turns_k": debug_turns_k,
         }, f, indent=2)
+    base_name = getattr(getattr(model, "config", None), "_name_or_path", "deepseek-ai/deepseek-coder-1.3b-instruct")
+    write_run_manifest(
+        output_dir=final_dir,
+        run_id=f"dpo_seed_{seed}",
+        model_name_or_path=base_name,
+        stage="dpo",
+        seed=seed,
+        hyperparameters={
+            "beta": beta,
+            "learning_rate": learning_rate,
+            "num_train_epochs": num_train_epochs,
+            "per_device_train_batch_size": per_device_train_batch_size,
+            "num_preference_pairs": len(preference_data),
+        },
+        dataset_split=preference_split or "train[:1500]",
+        turn_budget_k=debug_turns_k or 3,
+        reward_mode_or_loss="dpo_implicit",
+        parent_checkpoint="./checkpoints/sft/final",
+    )
     return dpo_trainer

@@ -6,15 +6,18 @@ from typing import Any, Callable, Dict, List, Optional
 
 from src.execution.executor import ExecutionResult, PythonSandbox, run_code
 from src.execution.status import ExecutionStatus
-from src.models.generation import extract_code_block
+from src.models.generation import (
+    build_prompt as _canonical_build_prompt,
+    build_repair_prompt,
+    extract_code_block,
+)
 from src.rewards.execution_reward import compute_partial_reward
 
 
 def build_prompt(problem: str, prev_code: str = None, traceback: str = None) -> str:
     if prev_code is None:
-        return f"### Problem:\n{problem}\n\n### Write a Python solution:\n```python"
-    return (f"### Problem:\n{problem}\n\n### Your previous code:\n```python\n{prev_code}\n```\n\n"
-            f"### Error you received:\n{(traceback or '')[:512]}\n\n### Fixed version:\n```python")
+        return _canonical_build_prompt(problem)
+    return build_repair_prompt(problem, prev_code, traceback or "")
 
 
 def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None) -> ExecutionResult:
@@ -110,12 +113,14 @@ class DebugLoop:
         self.sandbox, self.max_turns, self.traceback_token_cap = sandbox or PythonSandbox(), max_turns, traceback_token_cap
 
     def build_initial_prompt(self, problem_description: str) -> str:
-        return f"Solve the following programming problem in Python.\nProblem Statement:\n{problem_description}\n\nWrite clean, self-contained Python code wrapped in ```python ... ```."
+        return _canonical_build_prompt(problem_description)
 
     def build_turn_prompt(self, problem_description: str, previous_code: str, execution_result: ExecutionResult) -> str:
-        return (f"Problem Statement:\n{problem_description}\n\nPrevious solution failed execution.\n"
-                f"Previous Code:\n```python\n{previous_code}\n```\n\nExecution Feedback:\n{format_execution_feedback(execution_result)}\n\n"
-                "Identify the bug, correct the code, and provide the fixed Python solution wrapped in ```python ... ```." )
+        return build_repair_prompt(
+            problem_description,
+            previous_code,
+            format_execution_feedback(execution_result),
+        )
 
     def run_session(self, problem_description: str, test_cases: List[Dict[str, Any]], model_fn: Callable[[str], str], initial_code: Optional[str] = None) -> Dict[str, Any]:
         history, current_code, last_exec = [], initial_code, None
