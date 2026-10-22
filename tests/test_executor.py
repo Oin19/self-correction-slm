@@ -94,6 +94,46 @@ class TestExecutor(unittest.TestCase):
         self.assertEqual(res_ce.status, ExecutionStatus.CE)
         self.assertEqual(res_re.status, ExecutionStatus.RE)
 
+    def test_traceback_sanitization(self):
+        from src.execution.executor import sanitize_traceback
+        leaky_tb = "AssertionError: expected 5 matching segment(s), got 2. expected='42\\n' actual='10\\n'"
+        clean = sanitize_traceback(leaky_tb)
+        self.assertNotIn("expected='42", clean)
+        self.assertIn("expected=<REDACTED>", clean)
+
+    def test_io_no_oracle_leakage(self):
+        sandbox = PythonSandbox()
+        wrong_code = "import sys\nprint('wrong_answer')\n"
+        test_cases = [{"input": "5\n", "output": "SECRET_ORACLE_OUTPUT\n"}]
+        res = sandbox.run_tests(wrong_code, test_cases)
+        self.assertEqual(res.status, ExecutionStatus.WA)
+        self.assertNotIn("SECRET_ORACLE_OUTPUT", res.traceback)
+
+    def test_humaneval_check_execution_catches_bug(self):
+        from src.utils.test_cases import normalize_tests
+        # Buggy solution that returns False when it should return True
+        buggy_code = "def has_close_elements(numbers, threshold):\n    return False\n"
+        he_example = {
+            "entry_point": "has_close_elements",
+            "test": (
+                "def check(candidate):\n"
+                "    assert candidate([1.0, 2.0, 3.9, 4.0, 5.0, 2.2], 0.3) == True\n"
+            ),
+        }
+        cases = normalize_tests(he_example)
+        sandbox = PythonSandbox()
+        res = sandbox.run_tests(buggy_code, cases)
+        self.assertEqual(res.status, ExecutionStatus.WA)
+        self.assertEqual(res.passed_tests, 0)
+
+    def test_split_feedback_and_scoring(self):
+        from src.utils.test_cases import split_feedback_and_scoring_tests
+        tests = [{"assertion": f"assert f({i}) == {i}"} for i in range(6)]
+        fb, sc = split_feedback_and_scoring_tests(tests, feedback_ratio=0.5)
+        self.assertEqual(len(fb), 3)
+        self.assertEqual(len(sc), 3)
+        self.assertEqual(len(set(t["assertion"] for t in fb).intersection(set(t["assertion"] for t in sc))), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

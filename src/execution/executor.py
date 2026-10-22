@@ -2,9 +2,11 @@
 
 import ast
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 import traceback
 from dataclasses import dataclass, field
@@ -17,6 +19,17 @@ try:
     import resource
 except ImportError:
     resource = None
+
+
+def sanitize_traceback(tb: str) -> str:
+    """Scrub potential oracle values and expected strings from tracebacks before feedback."""
+    if not tb:
+        return ""
+    # Remove expected=... pattern
+    cleaned = re.sub(r'expected\s*=\s*[^,\n)]+', 'expected=<REDACTED>', tb, flags=re.IGNORECASE)
+    # Remove Expected '...', got '...'
+    cleaned = re.sub(r'Expected\s+[\'\"].*?[\'\"],\s*got', 'Expected output mismatch, got', cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 
 def run_code(code: str, timeout: int = 3) -> dict:
@@ -152,7 +165,7 @@ class PythonSandbox:
                 passed, total = score_io_output(actual, expected, packed)
                 tb = ""
                 if passed < total:
-                    tb = f"AssertionError: expected {total} matching segment(s)/line(s), got {passed}. expected={expected!r} actual={actual.strip()!r}"
+                    tb = f"AssertionError: Output mismatch: {passed}/{total} matching segment(s)/line(s). actual={actual.strip()!r}"
                 if proc.returncode == 0:
                     status = ExecutionStatus.AC if passed >= total and total > 0 else ExecutionStatus.WA
                     return ExecutionResult(status, passed, total, actual, stderr, tb, execution_time=elapsed)
@@ -256,6 +269,21 @@ class PythonSandbox:
             details=details,
         )
 
+    def run_tests_split(
+        self,
+        code: str,
+        feedback_tests: List[Dict[str, Any]],
+        scoring_tests: List[Dict[str, Any]],
+        timeout_per_test: Optional[float] = None,
+    ) -> Dict[str, ExecutionResult]:
+        """Run code separately on feedback tests (for debug loop) and held-out scoring tests."""
+        fb_res = self.run_tests(code, feedback_tests, timeout_per_test=timeout_per_test)
+        sc_res = self.run_tests(code, scoring_tests, timeout_per_test=timeout_per_test)
+        return {
+            "feedback": fb_res,
+            "scoring": sc_res,
+        }
+
     @staticmethod
     def _extract_actual_output(stderr: str) -> Optional[str]:
         start = "###ACTUAL###"
@@ -309,6 +337,7 @@ class PythonSandbox:
 
         script = f"{code}\n\n"
         if "assertion" in test_case:
+            indented_assertion = textwrap.indent(test_case["assertion"].strip(), "    ")
             script += (
                 "import sys, traceback\n"
                 "if 'Solution' in globals() and isinstance(globals()['Solution'], type):\n"
@@ -320,7 +349,7 @@ class PythonSandbox:
                 "    except Exception:\n"
                 "        pass\n"
                 "try:\n"
-                f"    {test_case['assertion']}\n"
+                f"{indented_assertion}\n"
                 "    print('PASSED_TEST_MARKER')\n"
                 "except AssertionError:\n"
                 "    traceback.print_exc()\n"
@@ -343,7 +372,7 @@ class PythonSandbox:
                 "    if actual == expected:\n"
                 "        print('PASSED_TEST_MARKER')\n"
                 "    else:\n"
-                "        print(f'AssertionError: Expected {expected!r}, got {actual!r}', file=sys.stderr)\n"
+                "        print(f'AssertionError: Return value did not match expected result. Got: {actual!r}', file=sys.stderr)\n"
                 "        sys.exit(2)\n"
                 "except SystemExit as e:\n    sys.exit(e.code)\n"
                 "except Exception:\n    traceback.print_exc(); sys.exit(1)\n"

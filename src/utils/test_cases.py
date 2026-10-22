@@ -1,4 +1,5 @@
 """Benchmark test-case normalization (no heavy ML deps)."""
+import ast
 import json
 
 
@@ -92,14 +93,57 @@ def _cases_from_input_output(raw) -> list:
     return cases
 
 
+def _extract_humaneval_assertions(test_script: str, entry_point: str) -> list:
+    """Extract individual assertion cases from HumanEval check(candidate) function.
+
+    Replaces `candidate` identifier with `entry_point` so each assertion can run
+    independently, allowing partial credit and feedback/scoring splitting.
+    """
+    if not test_script or not entry_point:
+        return []
+    try:
+        tree = ast.parse(test_script)
+        preamble_nodes = []
+        assertions = []
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "check":
+                for stmt in node.body:
+                    if isinstance(stmt, ast.Assert):
+                        # Replace 'candidate' with entry_point
+                        class CandidateReplacer(ast.NodeTransformer):
+                            def visit_Name(self, n):
+                                if n.id == "candidate":
+                                    return ast.copy_location(ast.Name(id=entry_point, ctx=n.ctx), n)
+                                return n
+                        new_stmt = CandidateReplacer().visit(stmt)
+                        ast.fix_missing_locations(new_stmt)
+                        if hasattr(ast, "unparse"):
+                            assertions.append(ast.unparse(new_stmt))
+            elif not isinstance(node, ast.FunctionDef):
+                preamble_nodes.append(node)
+
+        preamble = ""
+        if preamble_nodes and hasattr(ast, "unparse"):
+            preamble = "\n".join(ast.unparse(n) for n in preamble_nodes).strip()
+            if preamble:
+                preamble += "\n"
+
+        if assertions:
+            return [{"assertion": f"{preamble}{a}".strip()} for a in assertions]
+    except Exception:
+        pass
+    return []
+
+
 def normalize_tests(ex: dict) -> list:
     """Normalize APPS/HumanEval/MBPP test fields into executor-ready cases.
 
-    Prefers multi-case sources (input_output / test_list) over a monolithic
-    ``test`` script so passed/total can be > 1 and partial reward works.
+    Prefers multi-case sources (input_output / test_list / granular assertions)
+    over a monolithic ``test`` script so passed/total can be > 1 and partial reward works.
     Packed APPS stdin suites keep ``packed_tests=T`` so the executor can
     award segment/line partial credit instead of a single 0/1.
     Never duplicates cases to pad the count.
+    Ensures HumanEval check(entry_point) is always appended and executed.
     """
     sources = []
 
@@ -113,10 +157,59 @@ def normalize_tests(ex: dict) -> list:
         if tl:
             sources.append(tl)
 
-    if isinstance(ex.get("test"), str) and ex["test"].strip():
-        sources.append([ex["test"]])
+    test_str = ex.get("test")
+    entry_point = ex.get("entry_point")
+    if isinstance(test_str, str) and test_str.strip():
+        test_script = test_str.strip()
+        # Attempt fine-grained assertion extraction for HumanEval
+        if entry_point:
+            granular = _extract_humaneval_assertions(test_script, entry_point)
+            if granular:
+                sources.append(granular)
+
+        # Ensure monolithic check(entry_point) invocation is present
+        if entry_point and f"check({entry_point})" not in test_script:
+            test_script = f"{test_script}\ncheck({entry_point})\n"
+        sources.append([{"assertion": test_script}])
 
     if not sources:
         return []
     # Most cases first so partial credit has room; ties keep preference order above.
     return max(sources, key=len)
+
+
+def split_feedback_and_scoring_tests(
+    test_cases: list,
+    feedback_ratio: float = 0.5,
+    min_feedback: int = 1,
+    min_scoring: int = 1,
+) -> tuple:
+    """Split test cases into feedback_tests (for debug loop) and scoring_tests (held-out for evaluation).
+
+    If there is only 1 test case, it is mirrored into both feedback and scoring.
+    For >= 2 test cases, cases are partitioned deterministically to guarantee
+    disjoint sets where scoring_tests are never leaked into feedback.
+    """
+    if not test_cases:
+        return ([], [])
+    if len(test_cases) == 1:
+        return (list(test_cases), list(test_cases))
+
+    n = len(test_cases)
+    n_feedback = int(round(n * feedback_ratio))
+    n_feedback = max(min_feedback, min(n - min_scoring, n_feedback))
+
+    feedback_tests = list(test_cases[:n_feedback])
+    scoring_tests = list(test_cases[n_feedback:])
+    return (feedback_tests, scoring_tests)
+
+
+def get_problem_test_split(ex: dict, feedback_ratio: float = 0.5) -> dict:
+    """Extract normalized tests and return partitioned feedback and scoring test sets."""
+    all_tests = normalize_tests(ex)
+    fb, sc = split_feedback_and_scoring_tests(all_tests, feedback_ratio=feedback_ratio)
+    return {
+        "all_tests": all_tests,
+        "feedback_tests": fb,
+        "scoring_tests": sc,
+    }
