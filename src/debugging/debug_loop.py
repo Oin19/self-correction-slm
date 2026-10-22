@@ -4,7 +4,7 @@ import random
 import torch
 from typing import Any, Callable, Dict, List, Optional
 
-from src.execution.executor import ExecutionResult, PythonSandbox, run_code
+from src.execution.executor import ExecutionResult, PythonSandbox, run_code, sanitize_traceback
 from src.execution.status import ExecutionStatus
 from src.models.generation import (
     build_prompt as _canonical_build_prompt,
@@ -65,7 +65,7 @@ def agentic_debug_loop(model, tokenizer, problem: str, test_cases: list = None, 
         history.append({"turn": turn + 1, "prompt": prompt, "code": code, "result": result.to_dict()})
         if result.status == ExecutionStatus.AC:
             break
-        error = (result.traceback or result.stderr or result.stdout or "")[:512]
+        error = sanitize_traceback(result.traceback or result.stderr or result.stdout or "")[:512]
     return history
 
 

@@ -248,7 +248,7 @@ class PythonSandbox:
                 "traceback": res.traceback,
             })
             if res.status != ExecutionStatus.AC and not first_error:
-                first_error = res.traceback or res.stderr
+                first_error = sanitize_traceback(res.traceback or res.stderr)
             if res.status == ExecutionStatus.TLE:
                 overall_status = ExecutionStatus.TLE
             elif res.status == ExecutionStatus.MLE and overall_status != ExecutionStatus.TLE:

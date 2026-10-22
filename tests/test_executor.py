@@ -135,6 +135,17 @@ class TestExecutor(unittest.TestCase):
         self.assertEqual(len(set(t["assertion"] for t in fb).intersection(set(t["assertion"] for t in sc))), 0)
 
 
+    def test_frozen_protocol_contract(self):
+        from src.utils.protocol import get_frozen_contract, FROZEN_HUMANEVAL_IDS
+        contract = get_frozen_contract()
+        self.assertEqual(contract["primary_model"], "deepseek-ai/deepseek-coder-1.3b-instruct")
+        self.assertEqual(contract["turn_budgets"], [1, 3, 5])
+        self.assertEqual(contract["humaneval_total"], 164)
+        self.assertEqual(len(FROZEN_HUMANEVAL_IDS), 164)
+        self.assertEqual(FROZEN_HUMANEVAL_IDS[0], "HumanEval/0")
+        self.assertEqual(FROZEN_HUMANEVAL_IDS[-1], "HumanEval/163")
+
+
 if __name__ == "__main__":
     unittest.main()
 
