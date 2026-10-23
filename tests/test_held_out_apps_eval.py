@@ -130,6 +130,40 @@ class TestHeldOutAppsEval(unittest.TestCase):
                         self.assertTrue(lines[1]["cumulative_success_at_3"])
                         self.assertTrue(lines[1]["conditional_repair_at_3"])
 
+    def test_run_apps_evaluation_with_checkpoint(self):
+        mock_dataset = [
+            {
+                "problem_id": 1501,
+                "question": "Solve problem 1",
+                "starter_code": "def fn1():\n",
+                "input_output": json.dumps({"inputs": [[]], "outputs": [1], "fn_name": "fn1"}),
+            }
+        ]
+
+        def mock_debug_loop(model, tokenizer, problem, test_cases=None, K=1, **kwargs):
+            return [{"turn": 1, "prompt": "p", "code": "c", "status": "AC", "result": {"status": "AC", "passed_tests": 1, "total_tests": 1}, "tokens": 50, "latency": 0.1}]
+
+        with tempfile.TemporaryDirectory() as ckpt_dir:
+            with tempfile.TemporaryDirectory() as out_dir:
+                with patch("src.models.loader.load_canonical_checkpoint") as mock_canonical:
+                    with patch("scripts.run_held_out_apps_eval.load_apps_held_out_dataset") as mock_ds:
+                        with patch("src.evaluation.metrics.agentic_debug_loop", side_effect=mock_debug_loop):
+                            mock_canonical.return_value = (MagicMock(), MagicMock())
+                            mock_ds.return_value = mock_dataset
+
+                            res = run_apps_evaluation(
+                                model_name="base_model",
+                                checkpoint_path=ckpt_dir,
+                                arm_label="P1 (PPO-Dense)",
+                                k_values=[1],
+                                feedback_mode="F2",
+                                output_dir=out_dir,
+                                seed=42,
+                            )
+                            self.assertEqual(len(res["rows"]), 1)
+                            self.assertAlmostEqual(res["rows"][0]["Raw_Pass@1"], 1.0)
+                            mock_canonical.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

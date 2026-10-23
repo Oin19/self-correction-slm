@@ -87,16 +87,22 @@ def run_apps_evaluation(
     print(f"Seed             : {seed}\n", flush=True)
 
     # 1. Load Model & Tokenizer
-    attach_lora = checkpoint_path is not None and os.path.isdir(checkpoint_path)
-    model, tokenizer = load_model_and_tokenizer(
-        model_name=model_name,
-        load_in_4bit=load_in_4bit,
-        attach_lora=attach_lora,
-    )
-    if attach_lora:
-        from peft import PeftModel
-        print(f"Loading LoRA adapter weights from {checkpoint_path}...", flush=True)
-        model = PeftModel.from_pretrained(model, checkpoint_path)
+    if checkpoint_path and os.path.isdir(checkpoint_path):
+        from src.models.loader import load_canonical_checkpoint
+        print(f"Loading trained canonical checkpoint from {checkpoint_path}...", flush=True)
+        model, tokenizer = load_canonical_checkpoint(
+            checkpoint_path=checkpoint_path,
+            base_model_name=model_name,
+            load_in_4bit=load_in_4bit,
+            is_trainable=False,
+        )
+    else:
+        model, tokenizer = load_model_and_tokenizer(
+            model_name=model_name,
+            load_in_4bit=load_in_4bit,
+            attach_lora=False,
+            is_trainable=False,
+        )
     model.eval()
 
     # 2. Load Held-Out Dataset
