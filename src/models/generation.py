@@ -24,8 +24,23 @@ def generate_code(model, tokenizer, problem: str, temperature: float = 0.2, max_
 
 def extract_code_block(text: str, prompt: str = "") -> str:
     """Extract code block from raw generated LLM text."""
+    prompt_stripped = False
     if prompt and text.startswith(prompt):
         text = text[len(prompt) :]
+        prompt_stripped = True
+    else:
+        for marker in (
+            "### Fixed version:\n```python",
+            "### Write a Python solution:\n```python",
+            "### Python Solution:\n```python",
+        ):
+            if marker in text:
+                text = text.split(marker, 1)[-1]
+                prompt_stripped = True
+                break
+
+    if prompt_stripped and not text.lstrip().startswith("```"):
+        return text.split("```")[0].strip()
     if "```python" in text:
         code = text.split("```python")[-1].split("```")[0].strip()
     elif "```" in text:
