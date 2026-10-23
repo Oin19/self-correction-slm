@@ -88,7 +88,7 @@ def mcnemar_test(
     if (b + c) == 0:
         return {"a": a, "b": b, "c": c, "d": d, "chi2": 0.0, "p_value": 1.0, "odds_ratio": 1.0}
 
-    chi2 = ((abs(b - c) - 1.0) ** 2) / (b + c)
+    chi2 = (max(0.0, abs(b - c) - 1.0) ** 2) / (b + c)
     # Survival function approximation using complementary error function
     p_value = math.erfc(math.sqrt(chi2) / math.sqrt(2))
     p_value = float(max(0.0, min(1.0, p_value)))

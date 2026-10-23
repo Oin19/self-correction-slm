@@ -44,6 +44,16 @@ class TestPaperArtifactsGenerator(unittest.TestCase):
         self.assertTrue(res["p_value"] < 0.0001)
         self.assertAlmostEqual(res["odds_ratio"], 7.0)
 
+        # Test symmetric discordant pairs (b == c): chi2 must be exactly 0.0, p_value == 1.0
+        base_sym = [True] * 5 + [False] * 5
+        treat_sym = [False] * 5 + [True] * 5
+        res_sym = mcnemar_test(base_sym, treat_sym)
+        self.assertEqual(res_sym["b"], 5)
+        self.assertEqual(res_sym["c"], 5)
+        self.assertEqual(res_sym["chi2"], 0.0)
+        self.assertEqual(res_sym["p_value"], 1.0)
+        self.assertEqual(res_sym["odds_ratio"], 1.0)
+
     def test_holm_bonferroni_monotonicity(self):
         # 3 raw p-values: 0.005, 0.02, 0.04
         raw = [("Test1", 0.04), ("Test2", 0.005), ("Test3", 0.02)]

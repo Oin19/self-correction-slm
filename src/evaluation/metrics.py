@@ -351,8 +351,8 @@ def mcnemar_test(
     if (b + c) == 0:
         return {"b": b, "c": c, "chi2": 0.0, "p_value": 1.0}
 
-    # McNemar with continuity correction
-    chi2 = ((abs(b - c) - 1.0) ** 2) / (b + c)
+    # McNemar with Edwards continuity correction
+    chi2 = (max(0.0, abs(b - c) - 1.0) ** 2) / (b + c)
     # 1 degree of freedom: survival function approximation via erfc
     p_value = math.erfc(math.sqrt(chi2) / math.sqrt(2))
     return {
