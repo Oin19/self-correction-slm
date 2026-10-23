@@ -14,7 +14,7 @@ from src.utils.test_cases import split_feedback_and_scoring_tests
 
 
 def _format_problem_prompt(example: dict) -> str:
-    """Extract problem statement and include required function signature for MBPP-style items."""
+    """Extract problem statement and include required function signature for MBPP-style and APPS items."""
     problem = example.get("prompt", example.get("question", example.get("text", "")))
     if "prompt" not in example and "text" in example:
         code_ref = example.get("code", "")
@@ -36,6 +36,13 @@ def _format_problem_prompt(example: dict) -> str:
                 sig_line = s
         if sig_line and sig_line not in problem:
             problem = f"{problem.rstrip()}\n\nRequired function signature: `{sig_line}`"
+
+    starter_code = example.get("starter_code", "")
+    if starter_code and isinstance(starter_code, str) and starter_code.strip():
+        sc = starter_code.strip()
+        if sc not in problem:
+            problem = f"{problem.rstrip()}\n\n{sc}"
+
     return problem
 
 
@@ -51,6 +58,7 @@ def evaluate(
     debug_loop_fn: Optional[Callable] = None,
     max_samples: Optional[int] = None,
     temperature: float = 0.2,
+    skip_empty_tests: bool = True,
 ) -> Dict[str, Any]:
     """Compute Pass@1, Fix@K, ConditionalRepair@K, and stream per-problem JSONL records.
 
@@ -90,6 +98,9 @@ def evaluate(
 
         all_tests = extract_eval_test_cases(example)
         if not all_tests:
+            if skip_empty_tests:
+                print(f"[evaluate] Warning: Skipping problem {example.get('task_id', example.get('problem_id', i))} - no executable tests found.", flush=True)
+                continue
             raise ValueError(f"No executable tests for evaluation example {i}; refusing to score it.")
 
         if split_feedback_scoring and len(all_tests) > 1:
@@ -187,8 +198,9 @@ def evaluate(
                 flush=True,
             )
 
-    pass_at_1_rate = pass1_count / total if total else 0.0
-    cum_success_rate = cum_success_k_count / total if total else 0.0
+    num_evaluated = len(records)
+    pass_at_1_rate = pass1_count / num_evaluated if num_evaluated else 0.0
+    cum_success_rate = cum_success_k_count / num_evaluated if num_evaluated else 0.0
     cond_repair_rate = (cond_repair_success / cond_repair_eligible) if cond_repair_eligible else 0.0
     mean_repair_turn = (sum(repair_turns) / len(repair_turns)) if repair_turns else None
 
@@ -196,7 +208,8 @@ def evaluate(
         "label": label,
         "feedback_mode": feedback_mode,
         "K": K,
-        "total": total,
+        "total": num_evaluated,
+        "total_requested": total,
         "pass_at_1": pass_at_1_rate,
         f"fix_at_{K}": cum_success_rate,  # backward compatibility alias
         f"cumulative_success_at_{K}": cum_success_rate,
@@ -204,9 +217,9 @@ def evaluate(
         "conditional_repair_eligible": cond_repair_eligible,
         "conditional_repair_repaired": cond_repair_success,
         "mean_repair_turn": mean_repair_turn,
-        "mean_tokens_per_problem": (sum(all_tokens) / total) if total else 0.0,
-        "mean_latency_per_problem": (sum(all_latencies) / total) if total else 0.0,
-        "error_distribution": {k: v / total for k, v in final_statuses.items()},
+        "mean_tokens_per_problem": (sum(all_tokens) / num_evaluated) if num_evaluated else 0.0,
+        "mean_latency_per_problem": (sum(all_latencies) / num_evaluated) if num_evaluated else 0.0,
+        "error_distribution": {k: v / num_evaluated for k, v in final_statuses.items()} if num_evaluated else {},
         "output_jsonl": output_jsonl,
     }
     return summary

@@ -54,7 +54,10 @@ def run_all_baselines(
             datasets_map["mbpp"] = load_dataset("mbpp", split="test")
     if "apps" in benchmarks:
         print(f"Loading held-out APPS split {APPS_HELD_OUT_SPLIT}...", flush=True)
-        datasets_map["apps"] = load_dataset("codeparrot/apps", split=APPS_HELD_OUT_SPLIT)
+        try:
+            datasets_map["apps"] = load_dataset("codeparrot/apps", split=APPS_HELD_OUT_SPLIT)
+        except Exception:
+            datasets_map["apps"] = load_dataset("apps", split=APPS_HELD_OUT_SPLIT)
 
     summary_grid = []
 
@@ -135,9 +138,22 @@ def run_all_baselines(
             })
 
     print("\n================ PHASE 2 BASELINE RESULTS GRID ================", flush=True)
-    import pandas as pd
-    df = pd.DataFrame(summary_grid)
-    print(df.to_string(index=False), flush=True)
+    summary_csv = os.path.join(output_dir, "baseline_summary_grid.csv")
+    if summary_grid:
+        import csv
+        with open(summary_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(summary_grid[0].keys()))
+            writer.writeheader()
+            writer.writerows(summary_grid)
+        print(f"Summary grid written to {summary_csv}", flush=True)
+
+    try:
+        import pandas as pd
+        df = pd.DataFrame(summary_grid)
+        print(df.to_string(index=False), flush=True)
+    except Exception:
+        for row in summary_grid:
+            print(" | ".join(f"{k}: {v}" for k, v in row.items()), flush=True)
     return summary_grid
 
 
