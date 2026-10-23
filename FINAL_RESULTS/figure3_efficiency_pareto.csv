@@ -1,0 +1,9 @@
+Condition,CumulativeSuccess,TokensPerProblem,LatencySeconds,TokensPerSuccess
+B0 Base Greedy (K=1),0.384,142,0.42,370
+B1 Repeated Sampling (K=3),0.433,420,1.25,970
+B1 Repeated Sampling (K=5),0.451,710,2.1,1574
+B2 Base + Feedback (K=3),0.482,465,1.48,965
+S1 SFT Baseline (K=3),0.524,450,1.4,859
+P1 PPO-Dense (K=3),0.573,485,1.55,846
+P1 PPO-Dense (K=5),0.622,790,2.45,1270
+D1 Matched DPO (K=3),0.555,472,1.5,850

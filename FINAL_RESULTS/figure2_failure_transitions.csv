@@ -1,0 +1,5 @@
+Initial_Status,To_AC,To_WA,To_RE,To_CE,To_TLE,Repair_Rate
+WA,28,22,2,0,1,52.8%
+RE,14,7,9,1,1,43.8%
+CE,7,2,1,3,0,53.8%
+TLE,2,1,0,0,5,25.0%

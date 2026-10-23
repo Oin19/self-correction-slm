@@ -1,0 +1,51 @@
+<svg width="800" height="480" viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+<rect width="800" height="480" fill="#ffffff"/>
+<text x="400.0" y="32" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e293b">Figure 1: Cumulative Success and Conditional Repair Across Turns K</text>
+<line x1="80" y1="420" x2="750" y2="420" stroke="#cbd5e1" stroke-width="2"/>
+<line x1="80" y1="60" x2="80" y2="420" stroke="#cbd5e1" stroke-width="2"/>
+<line x1="80" y1="420.0" x2="750" y2="420.0" stroke="#f1f5f9" stroke-width="1"/>
+<text x="68" y="424.0" font-size="12" text-anchor="end" fill="#64748b">0%</text>
+<line x1="80" y1="317.1428571428571" x2="750" y2="317.1428571428571" stroke="#f1f5f9" stroke-width="1"/>
+<text x="68" y="321.1428571428571" font-size="12" text-anchor="end" fill="#64748b">20%</text>
+<line x1="80" y1="214.28571428571425" x2="750" y2="214.28571428571425" stroke="#f1f5f9" stroke-width="1"/>
+<text x="68" y="218.28571428571425" font-size="12" text-anchor="end" fill="#64748b">40%</text>
+<line x1="80" y1="111.42857142857139" x2="750" y2="111.42857142857139" stroke="#f1f5f9" stroke-width="1"/>
+<text x="68" y="115.42857142857139" font-size="12" text-anchor="end" fill="#64748b">60%</text>
+<text x="80.0" y="444" font-size="12" text-anchor="middle" fill="#64748b">K=1</text>
+<text x="247.5" y="444" font-size="12" text-anchor="middle" fill="#64748b">K=2</text>
+<text x="415.0" y="444" font-size="12" text-anchor="middle" fill="#64748b">K=3</text>
+<text x="582.5" y="444" font-size="12" text-anchor="middle" fill="#64748b">K=4</text>
+<text x="750.0" y="444" font-size="12" text-anchor="middle" fill="#64748b">K=5</text>
+<polyline points="80.0,222.5142857142857 247.5,153.59999999999997 415.0,125.31428571428575 582.5,109.37142857142857 750.0,100.1142857142857" fill="none" stroke="#2563eb" stroke-width="3"/>
+<circle cx="80.0" cy="222.5142857142857" r="4" fill="#2563eb"/>
+<circle cx="247.5" cy="153.59999999999997" r="4" fill="#2563eb"/>
+<circle cx="415.0" cy="125.31428571428575" r="4" fill="#2563eb"/>
+<circle cx="582.5" cy="109.37142857142857" r="4" fill="#2563eb"/>
+<circle cx="750.0" cy="100.1142857142857" r="4" fill="#2563eb"/>
+<line x1="100" y1="70" x2="120" y2="70" stroke="#2563eb" stroke-width="3"/>
+<text x="128" y="74" font-size="11" fill="#334155">PPO-Dense (CumSucc@K)</text>
+<polyline points="80.0,420.0 247.5,308.4 415.0,262.1142857142857 582.5,236.4 750.0,221.48571428571427" fill="none" stroke="#059669" stroke-width="3"/>
+<circle cx="80.0" cy="420.0" r="4" fill="#059669"/>
+<circle cx="247.5" cy="308.4" r="4" fill="#059669"/>
+<circle cx="415.0" cy="262.1142857142857" r="4" fill="#059669"/>
+<circle cx="582.5" cy="236.4" r="4" fill="#059669"/>
+<circle cx="750.0" cy="221.48571428571427" r="4" fill="#059669"/>
+<line x1="100" y1="90" x2="120" y2="90" stroke="#059669" stroke-width="3"/>
+<text x="128" y="94" font-size="11" fill="#334155">PPO-Dense (CondRepair@K)</text>
+<polyline points="80.0,222.5142857142857 247.5,191.1428571428571 415.0,172.1142857142857 582.5,159.77142857142854 750.0,153.59999999999997" fill="none" stroke="#d97706" stroke-width="3"/>
+<circle cx="80.0" cy="222.5142857142857" r="4" fill="#d97706"/>
+<circle cx="247.5" cy="191.1428571428571" r="4" fill="#d97706"/>
+<circle cx="415.0" cy="172.1142857142857" r="4" fill="#d97706"/>
+<circle cx="582.5" cy="159.77142857142854" r="4" fill="#d97706"/>
+<circle cx="750.0" cy="153.59999999999997" r="4" fill="#d97706"/>
+<line x1="100" y1="110" x2="120" y2="110" stroke="#d97706" stroke-width="3"/>
+<text x="128" y="114" font-size="11" fill="#334155">Base + F2 Feedback</text>
+<polyline points="80.0,222.5142857142857 247.5,210.17142857142858 415.0,197.31428571428572 582.5,191.1428571428571 750.0,188.05714285714282" fill="none" stroke="#94a3b8" stroke-width="3"/>
+<circle cx="80.0" cy="222.5142857142857" r="4" fill="#94a3b8"/>
+<circle cx="247.5" cy="210.17142857142858" r="4" fill="#94a3b8"/>
+<circle cx="415.0" cy="197.31428571428572" r="4" fill="#94a3b8"/>
+<circle cx="582.5" cy="191.1428571428571" r="4" fill="#94a3b8"/>
+<circle cx="750.0" cy="188.05714285714282" r="4" fill="#94a3b8"/>
+<line x1="100" y1="130" x2="120" y2="130" stroke="#94a3b8" stroke-width="3"/>
+<text x="128" y="134" font-size="11" fill="#334155">Base F0 Repeated Sampling</text>
+</svg>

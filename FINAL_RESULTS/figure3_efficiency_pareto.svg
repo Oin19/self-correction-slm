@@ -1,0 +1,36 @@
+<svg width="800" height="480" viewBox="0 0 800 480" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+<rect width="800" height="480" fill="#ffffff"/>
+<text x="400.0" y="32" font-size="16" font-weight="bold" text-anchor="middle" fill="#1e293b">Figure 3: Multi-Turn Self-Correction Pareto Frontier (Accuracy vs. Token Cost)</text>
+<line x1="80" y1="420" x2="750" y2="420" stroke="#cbd5e1" stroke-width="2"/>
+<line x1="80" y1="60" x2="80" y2="420" stroke="#cbd5e1" stroke-width="2"/>
+<line x1="228.88888888888889" y1="60" x2="228.88888888888889" y2="420" stroke="#f1f5f9" stroke-width="1"/>
+<text x="228.88888888888889" y="440" font-size="11" text-anchor="middle" fill="#64748b">200 tok</text>
+<line x1="377.77777777777777" y1="60" x2="377.77777777777777" y2="420" stroke="#f1f5f9" stroke-width="1"/>
+<text x="377.77777777777777" y="440" font-size="11" text-anchor="middle" fill="#64748b">400 tok</text>
+<line x1="526.6666666666666" y1="60" x2="526.6666666666666" y2="420" stroke="#f1f5f9" stroke-width="1"/>
+<text x="526.6666666666666" y="440" font-size="11" text-anchor="middle" fill="#64748b">600 tok</text>
+<line x1="675.5555555555555" y1="60" x2="675.5555555555555" y2="420" stroke="#f1f5f9" stroke-width="1"/>
+<text x="675.5555555555555" y="440" font-size="11" text-anchor="middle" fill="#64748b">800 tok</text>
+<line x1="80" y1="214.28571428571425" x2="750" y2="214.28571428571425" stroke="#f1f5f9" stroke-width="1"/>
+<text x="70" y="218.28571428571425" font-size="11" text-anchor="end" fill="#64748b">40%</text>
+<line x1="80" y1="162.85714285714283" x2="750" y2="162.85714285714283" stroke="#f1f5f9" stroke-width="1"/>
+<text x="70" y="166.85714285714283" font-size="11" text-anchor="end" fill="#64748b">50%</text>
+<line x1="80" y1="111.42857142857139" x2="750" y2="111.42857142857139" stroke="#f1f5f9" stroke-width="1"/>
+<text x="70" y="115.42857142857139" font-size="11" text-anchor="end" fill="#64748b">60%</text>
+<circle cx="185.7111111111111" cy="222.5142857142857" r="6" fill="#64748b"/>
+<text x="193.7111111111111" y="226.5142857142857" font-size="10" fill="#334155">B0 Base Greedy (K=1)</text>
+<circle cx="392.6666666666667" cy="197.31428571428572" r="6" fill="#94a3b8"/>
+<text x="400.6666666666667" y="201.31428571428572" font-size="10" fill="#334155">B1 Repeated Sampling (K=3)</text>
+<circle cx="608.5555555555555" cy="188.05714285714282" r="6" fill="#94a3b8"/>
+<text x="616.5555555555555" y="192.05714285714282" font-size="10" fill="#334155">B1 Repeated Sampling (K=5)</text>
+<circle cx="426.1666666666667" cy="172.1142857142857" r="6" fill="#d97706"/>
+<text x="434.1666666666667" y="176.1142857142857" font-size="10" fill="#334155">B2 Base + Feedback (K=3)</text>
+<circle cx="415.0" cy="150.51428571428568" r="6" fill="#059669"/>
+<text x="423.0" y="154.51428571428568" font-size="10" fill="#334155">S1 SFT Baseline (K=3)</text>
+<circle cx="441.05555555555554" cy="125.31428571428575" r="6" fill="#2563eb"/>
+<text x="449.05555555555554" y="129.31428571428575" font-size="10" fill="#334155">P1 PPO-Dense (K=3)</text>
+<circle cx="668.1111111111111" cy="100.1142857142857" r="6" fill="#2563eb"/>
+<text x="676.1111111111111" y="104.1142857142857" font-size="10" fill="#334155">P1 PPO-Dense (K=5)</text>
+<circle cx="431.3777777777778" cy="134.57142857142856" r="6" fill="#7c3aed"/>
+<text x="439.3777777777778" y="138.57142857142856" font-size="10" fill="#334155">D1 Matched DPO (K=3)</text>
+</svg>

@@ -1,0 +1,6 @@
+Failure Category,Count,Percentage,Description
+SEMANTIC_RECOVERY,0,0.0%,Initial WA resolved to AC via execution feedback
+RUNTIME_RECOVERY,0,0.0%,Initial RE/CE resolved to AC via exception feedback
+REGRESSION,0,0.0%,Negative repair: edit broke previously passing tests
+FEEDBACK_MISINTERPRETATION,0,0.0%,Feedback misread: syntax corruption or code wipe
+RESISTANT_PLATEAU,0,0.0%,Unresolved complex failure persisting across all turns

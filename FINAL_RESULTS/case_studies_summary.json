@@ -1,0 +1,17 @@
+{
+  "total_analyzed": 0,
+  "distribution": {
+    "SEMANTIC_RECOVERY": 0,
+    "RUNTIME_RECOVERY": 0,
+    "REGRESSION": 0,
+    "FEEDBACK_MISINTERPRETATION": 0,
+    "RESISTANT_PLATEAU": 0
+  },
+  "proportions": {
+    "SEMANTIC_RECOVERY": 0.0,
+    "RUNTIME_RECOVERY": 0.0,
+    "REGRESSION": 0.0,
+    "FEEDBACK_MISINTERPRETATION": 0.0,
+    "RESISTANT_PLATEAU": 0.0
+  }
+}

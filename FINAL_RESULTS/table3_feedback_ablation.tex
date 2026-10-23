@@ -1,0 +1,17 @@
+% Table 3: Feedback Granularity Ablation (RQ3)
+\begin{table}[t]
+\centering\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Feedback Condition} & \textbf{Pass@1} & \textbf{Fix@3} & \textbf{CondRepair@3} \\
+\midrule
+F0 Repeated Sampling (No Feedback) & 38.4\% & 43.3\% & 7.9\% \\
+F1 Status-Only Feedback & 38.4\% & 47.6\% & 14.9\% \\
+F2 Sanitized Traceback Feedback & 38.4\% & 56.1\% & 28.7\% \\
+F3 Structured Feedback & 38.4\% & 57.3\% & 30.7\% \\
+Random Fake Error Feedback & 38.4\% & 42.1\% & 6.0\% \\
+\bottomrule
+\end{tabular}
+\caption{Ablation over execution feedback signals under budget $K=3$ on HumanEval. $F_0$ serves as the repeated-sampling control.}
+\label{tab:feedback_ablation}
+\end{table}

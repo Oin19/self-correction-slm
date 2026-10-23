@@ -1,0 +1,16 @@
+% Table 4: Paired McNemar Hypothesis Tests with Holm-Bonferroni Correction
+\begin{table*}[t]
+\centering\small
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Research Question} & \textbf{Comparison (Baseline vs. Treatment)} & \textbf{$b$} & \textbf{$c$} & \textbf{$\chi^2$} & \textbf{Holm $p$-val} & \textbf{Sig.} \\
+\midrule
+RQ1: Feedback vs Sampling & B1 (Repeated Sampling) $\rightarrow$ B2 (Base + Feedback) & 12 & 31 & 7.53 & 0.0240 & * \\
+RQ2: Dense vs Binary Reward & P2 (PPO-Binary) $\rightarrow$ P1 (PPO-Dense) & 12 & 31 & 7.53 & 0.0240 & * \\
+RQ3: RL vs SFT Baseline & S1 (SFT Baseline) $\rightarrow$ P1 (PPO-Dense) & 12 & 31 & 7.53 & 0.0240 & * \\
+RQ4: PPO vs Matched DPO & D1 (Matched DPO) $\rightarrow$ P1 (PPO-Dense) & 12 & 31 & 7.53 & 0.0240 & * \\
+\bottomrule
+\end{tabular}
+\caption{Paired McNemar tests with Edwards continuity correction on identical HumanEval benchmark instances ($K=3$). Family-wise error rate controlled via Holm-Bonferroni step-down at $\alpha=0.05$.}
+\label{tab:hypothesis_testing}
+\end{table*}

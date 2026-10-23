@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-10-23T14:44:50Z",
+  "results_dir": "./results",
+  "output_dir": "./FINAL_RESULTS",
+  "model_arms": [],
+  "confidence_interval": 0.95,
+  "alpha_family_wise": 0.05,
+  "generated_artifacts": {
+    "table_1": {
+      "csv": "./FINAL_RESULTS\\table1_protocol.csv",
+      "tex": "./FINAL_RESULTS\\table1_protocol.tex",
+      "rows": 12
+    },
+    "table_2": {
+      "csv": "./FINAL_RESULTS\\table2_main_results.csv",
+      "tex": "./FINAL_RESULTS\\table2_main_results.tex",
+      "rows": 0
+    },
+    "table_3": {
+      "csv": "./FINAL_RESULTS\\table3_feedback_ablation.csv",
+      "tex": "./FINAL_RESULTS\\table3_feedback_ablation.tex",
+      "rows": 5
+    },
+    "table_4": {
+      "csv": "./FINAL_RESULTS\\table4_hypothesis_testing.csv",
+      "tex": "./FINAL_RESULTS\\table4_hypothesis_testing.tex",
+      "rows": 4
+    },
+    "figure_1": {
+      "csv": "./FINAL_RESULTS\\figure1_repair_curves.csv",
+      "svg": "./FINAL_RESULTS\\figure1_repair_curves.svg"
+    },
+    "figure_2": {
+      "csv": "./FINAL_RESULTS\\figure2_failure_transitions.csv",
+      "svg": "./FINAL_RESULTS\\figure2_failure_transitions.svg"
+    },
+    "figure_3": {
+      "csv": "./FINAL_RESULTS\\figure3_efficiency_pareto.csv",
+      "svg": "./FINAL_RESULTS\\figure3_efficiency_pareto.svg"
+    },
+    "natural_failures_count": 0
+  },
+  "elapsed_seconds": 0.016741275787353516
+}
