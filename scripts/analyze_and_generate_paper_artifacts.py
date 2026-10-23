@@ -28,6 +28,15 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 # 1. Statistical Engine (Pure Python Standard Library - Zero Dependency)
 # ==============================================================================
 
+def _latex_escape(text: Any) -> str:
+    """Escapes special LaTeX characters (&, %, _) safely without double-escaping."""
+    s = str(text) if text is not None else ""
+    s = re.sub(r'(?<!\\)&', r'\&', s)
+    s = re.sub(r'(?<!\\)%', r'\%', s)
+    s = re.sub(r'(?<!\\)_', r'\_', s)
+    return s
+
+
 def compute_bootstrap_ci(
     data: List[Union[int, float, bool]],
     metric_fn: Optional[Callable[[List[Any]], float]] = None,
@@ -249,9 +258,9 @@ def generate_table_1_protocol(protocol_yaml_path: str, output_dir: str) -> Dict[
         f.write("\\textbf{Category} & \\textbf{Experimental Variable} & \\textbf{Frozen Value / Specification} \\\\\n\\midrule\n")
         cur_cat = ""
         for r in rows:
-            cat_display = r["Category"] if r["Category"] != cur_cat else ""
+            cat_display = _latex_escape(r["Category"]) if r["Category"] != cur_cat else ""
             cur_cat = r["Category"]
-            f.write(f"{cat_display} & {r['Variable']} & {r['Frozen Value']} \\\\\n")
+            f.write(f"{cat_display} & {_latex_escape(r['Variable'])} & {_latex_escape(r['Frozen Value'])} \\\\\n")
         f.write("\\bottomrule\n\\end{tabular}\n")
         f.write("\\caption{Shared experimental protocol and reproducibility parameters frozen across all model arms and benchmarks under Gate G0.}\n")
         f.write("\\label{tab:protocol_contract}\n\\end{table*}\n")
@@ -375,9 +384,9 @@ def generate_table_2_main_results(
         f.write("\\textbf{Model / Arm} & \\textbf{Dataset} & \\textbf{Pass@1} & \\textbf{CumSucc@3} & \\textbf{CumSucc@5} & \\textbf{CondRepair@3} & \\textbf{CondRepair@5} & \\textbf{Mean Turn} \\\\\n\\midrule\n")
         for r in table_rows:
             f.write(
-                f"{r['Model Arm']} & {r['Benchmark']} & "
-                f"{r['raw_p1']:.1\\%} & {r['raw_cum3']:.1\\%} & {r['raw_cum5']:.1\\%} & "
-                f"{r['raw_cond3']:.1\\%} & {r['raw_cond5']:.1\\%} & {r['MeanRepairTurn']} \\\\\n"
+                f"{_latex_escape(r['Model Arm'])} & {_latex_escape(r['Benchmark'])} & "
+                f"{r['raw_p1']*100:.1f}\\% & {r['raw_cum3']*100:.1f}\\% & {r['raw_cum5']*100:.1f}\\% & "
+                f"{r['raw_cond3']*100:.1f}\\% & {r['raw_cond5']*100:.1f}\\% & {_latex_escape(r['MeanRepairTurn'])} \\\\\n"
             )
         f.write("\\bottomrule\n\\end{tabular}\n")
         f.write("\\caption{Main benchmark results on HumanEval and MBPP across all evaluation arms. Bracketed ranges in CSV indicate 95\\% non-parametric bootstrap confidence intervals (1,000 resamples).}\n")
@@ -428,10 +437,11 @@ def generate_table_3_feedback_ablation(
         f.write("\\begin{tabular}{lccc}\n\\toprule\n")
         f.write("\\textbf{Feedback Condition} & \\textbf{Pass@1} & \\textbf{Fix@3} & \\textbf{CondRepair@3} \\\\\n\\midrule\n")
         for r in rows:
-            p1 = r.get("Pass@1", "").replace("%", "\\%")
-            f3 = r.get("Fix@3", "").replace("%", "\\%")
-            c3 = r.get("CondRepair@3", "").replace("%", "\\%")
-            f.write(f"{r['Condition']} & {p1} & {f3} & {c3} \\\\\n")
+            cond = _latex_escape(r.get("Condition", ""))
+            p1 = _latex_escape(r.get("Pass@1", ""))
+            f3 = _latex_escape(r.get("Fix@3", ""))
+            c3 = _latex_escape(r.get("CondRepair@3", ""))
+            f.write(f"{cond} & {p1} & {f3} & {c3} \\\\\n")
         f.write("\\bottomrule\n\\end{tabular}\n")
         f.write("\\caption{Ablation over execution feedback signals under budget $K=3$ on HumanEval. $F_0$ serves as the repeated-sampling control.}\n")
         f.write("\\label{tab:feedback_ablation}\n\\end{table}\n")
@@ -527,8 +537,8 @@ def generate_table_4_hypothesis_testing(
         f.write("\\begin{tabular}{llccccc}\n\\toprule\n")
         f.write("\\textbf{Research Question} & \\textbf{Comparison (Baseline vs. Treatment)} & \\textbf{$b$} & \\textbf{$c$} & \\textbf{$\\chi^2$} & \\textbf{Holm $p$-val} & \\textbf{Sig.} \\\\\n\\midrule\n")
         for r in rows:
-            comp_clean = f"{r['Baseline Arm']} $\\rightarrow$ {r['Treatment Arm']}"
-            f.write(f"{r['Research Question']} & {comp_clean} & {r['b (Base+ / Treat-)']} & {r['c (Base- / Treat+)']} & {r['Chi2']} & {r['Holm-Adj p-value']} & {r['Significance']} \\\\\n")
+            comp_clean = f"{_latex_escape(r['Baseline Arm'])} $\\rightarrow$ {_latex_escape(r['Treatment Arm'])}"
+            f.write(f"{_latex_escape(r['Research Question'])} & {comp_clean} & {r['b (Base+ / Treat-)']} & {r['c (Base- / Treat+)']} & {r['Chi2']} & {r['Holm-Adj p-value']} & {r['Significance']} \\\\\n")
         f.write("\\bottomrule\n\\end{tabular}\n")
         f.write("\\caption{Paired McNemar tests with Edwards continuity correction on identical HumanEval benchmark instances ($K=3$). Family-wise error rate controlled via Holm-Bonferroni step-down at $\\alpha=0.05$.}\n")
         f.write("\\label{tab:hypothesis_testing}\n\\end{table*}\n")
@@ -681,7 +691,8 @@ def extract_natural_failures(
             if "b0" in arm_name.lower() or "base" in arm_name.lower():
                 for b_name, recs in bench_dict.items():
                     for r in recs:
-                        if not r.get("pass_at_1") and r.get("turn_history"):
+                        is_turn1_pass = bool(r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC"))
+                        if not is_turn1_pass and r.get("turn_history"):
                             turn1 = r["turn_history"][0]
                             entry = {
                                 "problem_id": r.get("problem_id"),
@@ -729,9 +740,10 @@ def _build_svg_line_plot(rows: List[Dict[str, Any]], title: str) -> str:
     # X ticks (K=1 to K=5)
     k_vals = [int(r["K"]) for r in rows if "K" in r]
     k_min, k_max = min(k_vals), max(k_vals)
+    k_denom = (k_max - k_min) if k_max != k_min else 1.0
 
     def x_scale(k):
-        return pad_l + ((k - k_min) / (k_max - k_min)) * plot_w
+        return pad_l + ((k - k_min) / k_denom) * plot_w
 
     def y_scale(v):
         return pad_t + plot_h - (float(v) / y_max) * plot_h
