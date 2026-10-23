@@ -14,12 +14,16 @@ import argparse
 import csv
 import json
 import os
-import sys
+import re
 import time
 from typing import Any, Dict, List, Optional
 
 from datasets import load_dataset
 
+from scripts.analyze_and_generate_paper_artifacts import (
+    _is_cum_succ_k,
+    _is_pass_at_1,
+)
 from src.evaluation.metrics import (
     compute_bootstrap_ci,
     evaluate,
@@ -107,12 +111,14 @@ def run_apps_evaluation(
 
     # 2. Load Held-Out Dataset
     dataset = load_apps_held_out_dataset()
-    total_avail = len(dataset)
+    total_avail = len(dataset) if dataset is not None else 0
+    if total_avail == 0:
+        raise RuntimeError(f"Held-out APPS partition {APPS_HELD_OUT_SPLIT} contains 0 records.")
     num_to_eval = min(total_avail, max_samples) if max_samples else total_avail
     print(f"Dataset successfully loaded. Total available: {total_avail}, Evaluating: {num_to_eval}", flush=True)
 
     summary_rows = []
-    safe_arm = arm_label.replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").lower()
+    safe_arm = re.sub(r'[^a-zA-Z0-9_\-]', '_', arm_label).strip('_').lower()
 
     if run_all_baselines:
         eval_configs = []
@@ -160,22 +166,10 @@ def run_apps_evaluation(
             with open(out_jsonl, "r", encoding="utf-8") as jf:
                 rec_list = [json.loads(line) for line in jf if line.strip()]
 
-        pass1_list = [
-            1.0 if (r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC")) else 0.0
-            for r in rec_list
-        ]
-        cumk_list = [
-            1.0 if (r.get(f"cumulative_success_at_{k}") or (isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] <= k) or (r.get("turn_history") and any(h.get("status") == "AC" for h in r["turn_history"][:k]))) else 0.0
-            for r in rec_list
-        ]
-        init_fails = [
-            r for r in rec_list
-            if not (r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC"))
-        ]
-        condk_list = [
-            1.0 if (r.get(f"conditional_repair_at_{k}") or (isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] <= k) or (r.get("turn_history") and any(h.get("status") == "AC" for h in r["turn_history"][:k]))) else 0.0
-            for r in init_fails
-        ]
+        pass1_list = [1.0 if _is_pass_at_1(r) else 0.0 for r in rec_list]
+        cumk_list = [1.0 if _is_cum_succ_k(r, k) else 0.0 for r in rec_list]
+        init_fails = [r for r in rec_list if not _is_pass_at_1(r)]
+        condk_list = [1.0 if _is_cum_succ_k(r, k) else 0.0 for r in init_fails]
 
         p1_m, p1_l, p1_u = compute_bootstrap_ci(pass1_list, ci=0.95, seed=seed)
         cumk_m, cumk_l, cumk_u = compute_bootstrap_ci(cumk_list, ci=0.95, seed=seed)
@@ -219,7 +213,34 @@ def run_apps_evaluation(
     with open(summary_json, "w", encoding="utf-8") as f:
         json.dump(summary_rows, f, indent=2)
 
-    # 4. Provenance Manifest
+    # 4. In-Domain Hypothesis Test (B1 vs B2 on APPS for RQ1 / RQ6)
+    mcnemar_summary = None
+    if run_all_baselines:
+        b1_file = os.path.join(output_dir, "b1_k3_apps.jsonl")
+        b2_file = os.path.join(output_dir, "b2_k3_apps.jsonl")
+        if os.path.isfile(b1_file) and os.path.isfile(b2_file):
+            b1_recs = {r["problem_id"]: r for r in [json.loads(l) for l in open(b1_file, encoding="utf-8") if l.strip()] if "problem_id" in r}
+            b2_recs = {r["problem_id"]: r for r in [json.loads(l) for l in open(b2_file, encoding="utf-8") if l.strip()] if "problem_id" in r}
+            common_ids = sorted(set(b1_recs.keys()).intersection(set(b2_recs.keys())))
+            if common_ids:
+                b1_succ = [_is_cum_succ_k(b1_recs[pid], 3) for pid in common_ids]
+                b2_succ = [_is_cum_succ_k(b2_recs[pid], 3) for pid in common_ids]
+                mcn = mcnemar_test(b1_succ, b2_succ)
+                mcnemar_summary = {
+                    "comparison": "B1 (Repeated Sampling K=3) vs B2 (Base + Feedback K=3) on APPS",
+                    "n": mcn["n"],
+                    "b": mcn["b"],
+                    "c": mcn["c"],
+                    "chi2": mcn["chi2"],
+                    "p_value": mcn["p_value"],
+                    "odds_ratio": mcn["odds_ratio"],
+                }
+                hyp_path = os.path.join(output_dir, "apps_hypothesis_test_rq1_rq6.json")
+                with open(hyp_path, "w", encoding="utf-8") as f:
+                    json.dump(mcnemar_summary, f, indent=2)
+                print(f"APPS Hypothesis Test saved: {hyp_path} (chi2={mcn['chi2']:.2f}, p={mcn['p_value']:.4f})", flush=True)
+
+    # 5. Provenance Manifest
     manifest = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "git_commit": git_commit_sha(),
@@ -228,6 +249,7 @@ def run_apps_evaluation(
         "apps_split": APPS_HELD_OUT_SPLIT,
         "k_values": k_values,
         "summary_results": summary_rows,
+        "in_domain_hypothesis_test": mcnemar_summary,
     }
     manifest_path = os.path.join(output_dir, "apps_eval_manifest.json")
     with open(manifest_path, "w", encoding="utf-8") as f:

@@ -164,6 +164,44 @@ class TestHeldOutAppsEval(unittest.TestCase):
                             self.assertAlmostEqual(res["rows"][0]["Raw_Pass@1"], 1.0)
                             mock_canonical.assert_called_once()
 
+    def test_run_apps_evaluation_all_baselines_with_mcnemar(self):
+        mock_dataset = [
+            {
+                "problem_id": 1501,
+                "question": "Solve problem 1",
+                "starter_code": "def fn1():\n",
+                "input_output": json.dumps({"inputs": [[]], "outputs": [1], "fn_name": "fn1"}),
+            }
+        ]
+
+        def mock_debug_loop(model, tokenizer, problem, feedback_mode="F2", K=3, **kwargs):
+            # In F2 mode, problem succeeds; in F0, problem fails
+            st = "AC" if feedback_mode == "F2" else "WA"
+            return [{"turn": 1, "prompt": "p", "code": "c", "status": st, "result": {"status": st, "passed_tests": 1 if st == "AC" else 0, "total_tests": 1}, "tokens": 50, "latency": 0.1}]
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            with patch("scripts.run_held_out_apps_eval.load_model_and_tokenizer") as mock_load:
+                with patch("scripts.run_held_out_apps_eval.load_apps_held_out_dataset") as mock_ds:
+                    with patch("src.evaluation.metrics.agentic_debug_loop", side_effect=mock_debug_loop):
+                        mock_load.return_value = (MagicMock(), MagicMock())
+                        mock_ds.return_value = mock_dataset
+
+                        res = run_apps_evaluation(
+                            model_name="base_model",
+                            run_all_baselines=True,
+                            k_values=[3],
+                            output_dir=out_dir,
+                            seed=42,
+                        )
+                        # B0 (K=1), B1 (K=3), B2 (K=3) -> 3 configurations
+                        self.assertEqual(len(res["rows"]), 3)
+                        self.assertTrue(os.path.isfile(res["manifest"]))
+                        with open(res["manifest"], "r", encoding="utf-8") as f:
+                            man = json.load(f)
+                        self.assertIsNotNone(man.get("in_domain_hypothesis_test"))
+                        self.assertEqual(man["in_domain_hypothesis_test"]["b"], 0)
+                        self.assertEqual(man["in_domain_hypothesis_test"]["c"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
