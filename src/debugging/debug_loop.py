@@ -50,13 +50,35 @@ def build_prompt(problem: str, prev_code: str = None, traceback: str = None, fee
     )
 
 
-def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None) -> ExecutionResult:
+def _prepare_executable_code(code: str, problem: str = "") -> str:
+    """Ensure HumanEval prompt imports or function headers are preserved when executing extracted code."""
+    if not code or not problem:
+        return code
+    prob_lines = problem.splitlines()
+    has_prob_def = any(line.startswith("def ") for line in prob_lines)
+    has_code_def = any(line.lstrip().startswith("def ") for line in code.splitlines())
+    if has_prob_def and not has_code_def:
+        body_lines = code.splitlines()
+        if body_lines and not body_lines[0].startswith((" ", "\t")):
+            body_lines = ["    " + ln if ln.strip() else ln for ln in body_lines]
+        return problem.rstrip() + "\n" + "\n".join(body_lines)
+    import_lines = [
+        ln for ln in prob_lines
+        if ln.startswith(("import ", "from ")) and ln not in code
+    ]
+    if import_lines:
+        return "\n".join(import_lines) + "\n" + code
+    return code
+
+
+def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None, problem: str = "") -> ExecutionResult:
     """Execute against explicit benchmark tests; empty tests are never AC."""
     sandbox = sandbox or PythonSandbox()
     if not test_cases:
         return ExecutionResult("CE", 0, 0, traceback="No executable test cases supplied.")
+    exec_code = _prepare_executable_code(code, problem)
     if all(isinstance(t, str) for t in test_cases):
-        r = run_code(code + "\n\n" + "\n\n".join(test_cases))
+        r = run_code(exec_code + "\n\n" + "\n\n".join(test_cases))
         return ExecutionResult(
             r["status"],
             1 if r["status"] == "AC" else 0,
@@ -64,7 +86,7 @@ def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = Non
             stdout=r.get("output", ""),
             traceback=r.get("traceback", ""),
         )
-    return sandbox.run_tests(code, test_cases)
+    return sandbox.run_tests(exec_code, test_cases)
 
 
 def agentic_debug_loop(
@@ -104,7 +126,7 @@ def agentic_debug_loop(
                 output = model.generate(**inputs, **gen_kwargs)
             full = tokenizer.decode(output[0], skip_special_tokens=True)
             code = extract_code_block(full, prompt)
-        result = _execute(code, tests, sandbox)
+        result = _execute(code, tests, sandbox, problem=problem)
         history.append(
             {
                 "turn": turn + 1,
@@ -149,7 +171,7 @@ def agentic_loop_no_feedback(model, tokenizer, problem: str, test_cases: list = 
             output = model.generate(**inputs, **gen_kwargs)
         full = tokenizer.decode(output[0], skip_special_tokens=True)
         code = extract_code_block(full, prompt)
-        result = _execute(code, tests, sandbox)
+        result = _execute(code, tests, sandbox, problem=problem)
         history.append({"turn": turn + 1, "code": code, "result": result.to_dict()})
         if result.status == ExecutionStatus.AC:
             break
