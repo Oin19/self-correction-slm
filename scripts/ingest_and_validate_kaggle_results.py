@@ -21,11 +21,11 @@ import glob
 import json
 import os
 import re
-import shutil
-import sys
 import time
 import zipfile
 from typing import Any, Dict, List, Optional, Tuple
+
+from scripts.analyze_and_generate_paper_artifacts import _is_pass_at_1
 
 
 BENCHMARK_EXPECTED_COUNTS = {
@@ -140,7 +140,7 @@ def validate_jsonl_trace(file_path: str) -> Dict[str, Any]:
             if h.get("tokens", 0) == 0:
                 missing_tokens += 1
 
-        if r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC"):
+        if _is_pass_at_1(r):
             passed_count += 1
 
     is_valid = (corrupted_lines == 0) and (leakage_violations == 0) and (total_records > 0)
@@ -199,6 +199,8 @@ def ingest_and_validate_results(
 
     for path in discovered_files:
         filename = os.path.basename(path)
+        if "natural_failures" in filename.lower():
+            continue
         arm, bench, k_val = classify_trace_filename(filename)
 
         v_res = validate_jsonl_trace(path)
