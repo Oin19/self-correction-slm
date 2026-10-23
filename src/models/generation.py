@@ -49,10 +49,9 @@ def extract_code_block(text: str, prompt: str = "") -> str:
     """Extract code block from raw generated LLM text.
 
     Handles:
-    1. Generations where prompt is prefixed and ended with ```python
-    2. PPO completions where only the generated body + closing ``` fence is returned
-    3. Multi-block responses with ```python ... ```
-    4. Unfenced plain python text
+    1. Generations where prompt ends with ```python and model output completes directly before closing ```
+    2. Model responses containing full ```python ... ``` fences
+    3. Multi-block responses and unfenced plain Python code
     Never returns <EMPTY> when executable code is present.
     """
     if not text:
@@ -60,17 +59,39 @@ def extract_code_block(text: str, prompt: str = "") -> str:
 
     # Strip prompt prefix if present
     content = text
+    prompt_stripped = False
     if prompt and content.startswith(prompt):
         content = content[len(prompt):]
+        prompt_stripped = True
+    else:
+        for marker in (
+            "### Fixed Solution:\n```python",
+            "### Solution:\n```python",
+            "### Fixed version:\n```python",
+            "### Write a Python solution:\n```python",
+            "### Python Solution:\n```python",
+        ):
+            if marker in content:
+                content = content.split(marker, 1)[-1]
+                prompt_stripped = True
+                break
 
-    # If text contains ```python ... ```
+    # Case A: Prompt already opened ```python (either stripped or prompt ended with ```python)
+    prompt_had_opening_fence = prompt_stripped or (prompt and prompt.strip().endswith("```python"))
+    if prompt_had_opening_fence and not content.lstrip().startswith("```"):
+        if "```" in content:
+            first_block = content.split("```", 1)[0].strip()
+            if first_block:
+                return first_block
+
+    # Case B: If text contains ```python ... ```
     if "```python" in content:
         after = content.split("```python", 1)[1]
         code = after.split("```", 1)[0].strip()
         if code:
             return code
 
-    # If text contains general ``` ... ``` fences
+    # Case C: If text contains general ``` ... ``` fences
     fence_count = content.count("```")
     if fence_count >= 2:
         after = content.split("```", 1)[1]
@@ -81,10 +102,8 @@ def extract_code_block(text: str, prompt: str = "") -> str:
         if code:
             return code
     elif fence_count == 1:
-        # Exactly one fence: determine if it is closing or opening
         prefix = content.split("```", 1)[0].strip()
         suffix = content.split("```", 1)[1].strip()
-        # If prefix contains code (e.g. prompt already had ```python, response ends with ```)
         if len(prefix) >= len(suffix) and prefix:
             return prefix
         elif suffix:

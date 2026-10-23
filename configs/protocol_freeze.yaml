@@ -23,7 +23,7 @@ benchmarks:
     train_split: "train[:1500]"
     held_out_eval_split: "train[1500:2000]"
   humaneval:
-    hf_dataset: "openai_humaneval"
+    hf_dataset: "openai/openai_humaneval"
     split: "test"
     total_problems: 164
     problem_id_format: "HumanEval/{0..163}"

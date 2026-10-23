@@ -42,7 +42,10 @@ def run_all_baselines(
     datasets_map = {}
     if "humaneval" in benchmarks:
         print("Loading HumanEval test split...", flush=True)
-        datasets_map["humaneval"] = load_dataset("openai_humaneval", split="test")
+        try:
+            datasets_map["humaneval"] = load_dataset("openai/openai_humaneval", split="test")
+        except Exception:
+            datasets_map["humaneval"] = load_dataset("openai_humaneval", split="test")
     if "mbpp" in benchmarks:
         print("Loading MBPP test split...", flush=True)
         try:

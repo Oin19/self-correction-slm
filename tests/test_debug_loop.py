@@ -5,7 +5,8 @@ import os
 import tempfile
 import unittest
 
-from src.debugging.debug_loop import DebugLoop
+from src.debugging.debug_loop import DebugLoop, _prepare_executable_code
+from src.evaluation.metrics import _format_problem_prompt
 from src.execution.executor import PythonSandbox
 from src.execution.status import ExecutionStatus
 from src.models.generation import extract_code_block
@@ -40,6 +41,29 @@ class TestDebugLoop(unittest.TestCase):
     def test_extract_code_block_standard_fenced(self):
         fenced = "```python\ndef foo():\n    return 42\n```"
         self.assertEqual(extract_code_block(fenced), "def foo():\n    return 42")
+
+    def test_prepare_executable_code_imports(self):
+        problem = "from typing import List, Optional\ndef foo(x: List[int]) -> Optional[int]:\n    pass"
+        code = "def foo(x: List[int]) -> Optional[int]:\n    return x[0] if x else None"
+        prepared = _prepare_executable_code(code, problem)
+        self.assertIn("from typing import List, Optional", prepared)
+        self.assertIn("return x[0]", prepared)
+
+    def test_prepare_executable_code_bare_body(self):
+        problem = "def add_two(a, b):\n    \"\"\"Add two numbers\"\"\""
+        bare_body = "return a + b"
+        prepared = _prepare_executable_code(bare_body, problem)
+        self.assertIn("def add_two(a, b):", prepared)
+        self.assertIn("    return a + b", prepared)
+
+    def test_format_problem_prompt_mbpp(self):
+        mbpp_example = {
+            "text": "Write a python function to find the minimum of two numbers.",
+            "code": "def min_two(a, b):\n    return min(a, b)",
+            "test_list": ["assert min_two(3, 5) == 3"],
+        }
+        formatted = _format_problem_prompt(mbpp_example)
+        self.assertIn("Required function signature: `def min_two(a, b):`", formatted)
 
     def test_run_manifest_12_fields(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

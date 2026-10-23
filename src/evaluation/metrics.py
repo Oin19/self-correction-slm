@@ -4,12 +4,39 @@ import json
 import math
 import os
 import random
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from src.debugging.debug_loop import agentic_debug_loop
 from src.utils.test_cases import normalize_tests as extract_eval_test_cases
 from src.utils.test_cases import split_feedback_and_scoring_tests
+
+
+def _format_problem_prompt(example: dict) -> str:
+    """Extract problem statement and include required function signature for MBPP-style items."""
+    problem = example.get("prompt", example.get("question", example.get("text", "")))
+    if "prompt" not in example and "text" in example:
+        code_ref = example.get("code", "")
+        test_list = example.get("test_list") or []
+        target_fn = None
+        if test_list and isinstance(test_list[0], str):
+            m = re.search(r"assert\s+.*?([A-Za-z_][A-Za-z0-9_]*)\s*\(", test_list[0])
+            if m:
+                cand = m.group(1)
+                if cand not in {"set", "list", "tuple", "dict", "len", "abs", "round", "sorted", "math", "str", "bool", "int", "float"}:
+                    target_fn = cand
+        sig_line = None
+        for line in code_ref.splitlines():
+            s = line.strip()
+            if s.startswith("def ") and s.endswith(":"):
+                if target_fn is None or f"def {target_fn}(" in s:
+                    sig_line = s
+                    break
+                sig_line = s
+        if sig_line and sig_line not in problem:
+            problem = f"{problem.rstrip()}\n\nRequired function signature: `{sig_line}`"
+    return problem
 
 
 def evaluate(
@@ -70,7 +97,7 @@ def evaluate(
         else:
             fb_tests, sc_tests = all_tests, all_tests
 
-        problem = example.get("prompt", example.get("question", example.get("text", "")))
+        problem = _format_problem_prompt(example)
         prob_id = example.get("task_id", example.get("problem_id", f"problem_{i}"))
 
         prob_start = time.time()

@@ -13,6 +13,27 @@ from src.rewards.execution_reward import compute_partial_reward
 from src.utils.test_cases import split_feedback_and_scoring_tests
 
 
+def _prepare_executable_code(code: str, problem: str = "") -> str:
+    """Ensure HumanEval prompt imports or function headers are preserved when executing extracted code."""
+    if not code or not problem:
+        return code
+    prob_lines = problem.splitlines()
+    has_prob_def = any(line.startswith("def ") for line in prob_lines)
+    has_code_def = any(line.lstrip().startswith("def ") for line in code.splitlines())
+    if has_prob_def and not has_code_def:
+        body_lines = code.splitlines()
+        if body_lines and not body_lines[0].startswith((" ", "\t")):
+            body_lines = ["    " + ln if ln.strip() else ln for ln in body_lines]
+        return problem.rstrip() + "\n" + "\n".join(body_lines)
+    import_lines = [
+        ln for ln in prob_lines
+        if ln.startswith(("import ", "from ")) and ln not in code
+    ]
+    if import_lines:
+        return "\n".join(import_lines) + "\n" + code
+    return code
+
+
 def format_feedback(
     result: ExecutionResult,
     mode: str = "F2",
@@ -82,16 +103,17 @@ def build_mode_prompt(
     return build_repair_prompt(problem, prev_code, feedback_str)
 
 
-def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None) -> ExecutionResult:
+def _execute(code: str, test_cases: list, sandbox: Optional[PythonSandbox] = None, problem: str = "") -> ExecutionResult:
     """Execute against explicit benchmark tests; empty tests are never AC."""
     sandbox = sandbox or PythonSandbox()
     if not test_cases:
         return ExecutionResult("CE", 0, 0, traceback="No executable test cases supplied.")
+    exec_code = _prepare_executable_code(code, problem)
     if all(isinstance(t, str) for t in test_cases):
-        r = run_code(code + "\n\n" + "\n\n".join(test_cases))
+        r = run_code(exec_code + "\n\n" + "\n\n".join(test_cases))
         return ExecutionResult(r["status"], 1 if r["status"] == "AC" else 0, 1,
                                stdout=r.get("output", ""), traceback=r.get("traceback", ""))
-    return sandbox.run_tests(code, test_cases)
+    return sandbox.run_tests(exec_code, test_cases)
 
 
 def agentic_debug_loop(
@@ -163,11 +185,11 @@ def agentic_debug_loop(
             code = extract_code_block(full, prompt)
 
         # Run feedback tests (for prompt injection)
-        fb_res = _execute(code, fb_cases, sandbox)
+        fb_res = _execute(code, fb_cases, sandbox, problem=problem)
         last_fb_result = fb_res
 
         # Run scoring tests (for benchmark metric evaluation)
-        sc_res = _execute(code, sc_cases, sandbox) if sc_cases != fb_cases else fb_res
+        sc_res = _execute(code, sc_cases, sandbox, problem=problem) if sc_cases != fb_cases else fb_res
 
         elapsed = time.time() - turn_start
         history.append({
@@ -246,7 +268,8 @@ class DebugLoop:
                 prompt = self.build_turn_prompt(problem_description, current_code, last_exec)
                 current_code = extract_code_block(model_fn(prompt))
 
-            exec_res = self.sandbox.run_tests(current_code, test_cases)
+            exec_code = _prepare_executable_code(current_code, problem_description)
+            exec_res = self.sandbox.run_tests(exec_code, test_cases)
             last_exec = exec_res
             history.append({
                 "turn": turn_idx,
