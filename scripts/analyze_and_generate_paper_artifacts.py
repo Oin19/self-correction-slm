@@ -37,6 +37,30 @@ def _latex_escape(text: Any) -> str:
     return s
 
 
+def _is_pass_at_1(r: Dict[str, Any]) -> bool:
+    """Helper to determine if a problem passed at Turn 1."""
+    if r.get("pass_at_1"):
+        return True
+    if isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] == 1:
+        return True
+    hist = r.get("turn_history", [])
+    if isinstance(hist, list) and len(hist) > 0 and hist[0].get("status") == "AC":
+        return True
+    return False
+
+
+def _is_cum_succ_k(r: Dict[str, Any], k: int) -> bool:
+    """Helper to uniformly determine if a problem was solved at or before turn k."""
+    if r.get(f"cumulative_success_at_{k}"):
+        return True
+    if isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] <= k:
+        return True
+    hist = r.get("turn_history", [])
+    if isinstance(hist, list) and any(h.get("status") == "AC" for h in hist[:k]):
+        return True
+    return False
+
+
 def compute_bootstrap_ci(
     data: List[Union[int, float, bool]],
     metric_fn: Optional[Callable[[List[Any]], float]] = None,
@@ -303,43 +327,17 @@ def generate_table_2_main_results(
 
             n = len(recs)
             # Pass@1: Turn 1 is AC
-            pass1_list = [
-                1.0 if (r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC")) else 0.0
-                for r in recs
-            ]
+            pass1_list = [1.0 if _is_pass_at_1(r) else 0.0 for r in recs]
             # CumulativeSuccess@3: Any turn <= 3 is AC
-            cum3_list = [
-                1.0 if any(h.get("status") == "AC" for h in r.get("turn_history", [])[:3])
-                or r.get("cumulative_success_at_3")
-                or (r.get("solved_turn") and r["solved_turn"] <= 3) else 0.0
-                for r in recs
-            ]
+            cum3_list = [1.0 if _is_cum_succ_k(r, 3) else 0.0 for r in recs]
             # CumulativeSuccess@5: Any turn <= 5 is AC
-            cum5_list = [
-                1.0 if any(h.get("status") == "AC" for h in r.get("turn_history", [])[:5])
-                or r.get("cumulative_success_at_5")
-                or (r.get("solved_turn") and r["solved_turn"] <= 5) else 0.0
-                for r in recs
-            ]
+            cum5_list = [1.0 if _is_cum_succ_k(r, 5) else 0.0 for r in recs]
 
             # ConditionalRepair: Among initially failed problems (Turn 1 != AC)
-            init_fails = [
-                r for r in recs
-                if not (r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC"))
-            ]
+            init_fails = [r for r in recs if not _is_pass_at_1(r)]
             cond_eligible_n = len(init_fails)
-            cond3_list = [
-                1.0 if any(h.get("status") == "AC" for h in r.get("turn_history", [])[:3])
-                or r.get("conditional_repair_at_3")
-                or (r.get("solved_turn") and r["solved_turn"] <= 3) else 0.0
-                for r in init_fails
-            ]
-            cond5_list = [
-                1.0 if any(h.get("status") == "AC" for h in r.get("turn_history", [])[:5])
-                or r.get("conditional_repair_at_5")
-                or (r.get("solved_turn") and r["solved_turn"] <= 5) else 0.0
-                for r in init_fails
-            ]
+            cond3_list = [1.0 if _is_cum_succ_k(r, 3) else 0.0 for r in init_fails]
+            cond5_list = [1.0 if _is_cum_succ_k(r, 5) else 0.0 for r in init_fails]
 
             p1_m, p1_l, p1_u = compute_bootstrap_ci(pass1_list, ci=ci)
             cum3_m, cum3_l, cum3_u = compute_bootstrap_ci(cum3_list, ci=ci)
@@ -348,7 +346,10 @@ def generate_table_2_main_results(
             cond5_m, cond5_l, cond5_u = compute_bootstrap_ci(cond5_list, ci=ci) if cond5_list else (0.0, 0.0, 0.0)
 
             # Repair turn mean
-            repair_turns = [r["solved_turn"] for r in recs if r.get("solved_turn") and r["solved_turn"] > 1]
+            repair_turns = [
+                r["solved_turn"] for r in recs
+                if isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] > 1
+            ]
             mean_turn = (sum(repair_turns) / len(repair_turns)) if repair_turns else None
 
             table_rows.append({
@@ -482,14 +483,8 @@ def generate_table_4_hypothesis_testing(
         common_ids = sorted(set(base_map.keys()).intersection(set(treat_map.keys())))
 
         if len(common_ids) >= 10:
-            base_succ = [
-                bool(base_map[pid].get("cumulative_success_at_3") or any(h.get("status") == "AC" for h in base_map[pid].get("turn_history", [])[:3]))
-                for pid in common_ids
-            ]
-            treat_succ = [
-                bool(treat_map[pid].get("cumulative_success_at_3") or any(h.get("status") == "AC" for h in treat_map[pid].get("turn_history", [])[:3]))
-                for pid in common_ids
-            ]
+            base_succ = [_is_cum_succ_k(base_map[pid], 3) for pid in common_ids]
+            treat_succ = [_is_cum_succ_k(treat_map[pid], 3) for pid in common_ids]
             mcn = mcnemar_test(base_succ, treat_succ)
         else:
             # Fallback values if traces not yet fully populated
@@ -608,7 +603,7 @@ def generate_figure_2_failure_transitions(
 
     for r in target_traces:
         hist = r.get("turn_history", [])
-        if len(hist) >= 2:
+        if len(hist) >= 1:
             st1 = hist[0].get("status", "UNKNOWN")
             st_final = hist[-1].get("status", "UNKNOWN")
             if st1 in matrix and st_final in matrix[st1]:
@@ -691,8 +686,7 @@ def extract_natural_failures(
             if "b0" in arm_name.lower() or "base" in arm_name.lower():
                 for b_name, recs in bench_dict.items():
                     for r in recs:
-                        is_turn1_pass = bool(r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC"))
-                        if not is_turn1_pass and r.get("turn_history"):
+                        if not _is_pass_at_1(r) and r.get("turn_history"):
                             turn1 = r["turn_history"][0]
                             entry = {
                                 "problem_id": r.get("problem_id"),
@@ -702,7 +696,7 @@ def extract_natural_failures(
                                 "passed_tests": turn1.get("passed_tests", 0),
                                 "total_tests": turn1.get("total_tests", 1),
                                 "tokens": turn1.get("tokens", 0),
-                                "repaired_eventually": r.get("cumulative_success_at_5", False),
+                                "repaired_eventually": _is_cum_succ_k(r, 5),
                             }
                             out_f.write(json.dumps(entry) + "\n")
                             count += 1

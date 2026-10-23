@@ -6,6 +6,8 @@ import tempfile
 import unittest
 
 from scripts.analyze_and_generate_paper_artifacts import (
+    _is_cum_succ_k,
+    _is_pass_at_1,
     compute_bootstrap_ci,
     discover_evaluation_traces,
     extract_natural_failures,
@@ -23,6 +25,31 @@ from scripts.analyze_and_generate_paper_artifacts import (
 
 
 class TestPaperArtifactsGenerator(unittest.TestCase):
+    def test_classification_helpers(self):
+        # Solved at turn 1
+        rec1 = {"pass_at_1": True, "turn_history": [{"status": "AC"}]}
+        self.assertTrue(_is_pass_at_1(rec1))
+        self.assertTrue(_is_cum_succ_k(rec1, 3))
+        self.assertTrue(_is_cum_succ_k(rec1, 5))
+
+        # Solved at turn 2
+        rec2 = {"pass_at_1": False, "solved_turn": 2, "turn_history": [{"status": "WA"}, {"status": "AC"}]}
+        self.assertFalse(_is_pass_at_1(rec2))
+        self.assertTrue(_is_cum_succ_k(rec2, 3))
+        self.assertTrue(_is_cum_succ_k(rec2, 5))
+
+        # Solved at turn 5
+        rec5 = {"turn_history": [{"status": "WA"}, {"status": "WA"}, {"status": "WA"}, {"status": "WA"}, {"status": "AC"}]}
+        self.assertFalse(_is_pass_at_1(rec5))
+        self.assertFalse(_is_cum_succ_k(rec5, 3))
+        self.assertTrue(_is_cum_succ_k(rec5, 5))
+
+        # Never solved
+        rec_fail = {"turn_history": [{"status": "WA"}, {"status": "WA"}]}
+        self.assertFalse(_is_pass_at_1(rec_fail))
+        self.assertFalse(_is_cum_succ_k(rec_fail, 3))
+        self.assertFalse(_is_cum_succ_k(rec_fail, 5))
+
     def test_bootstrap_ci_exact(self):
         data = [1.0] * 50 + [0.0] * 50
         mean, lower, upper = compute_bootstrap_ci(data, num_samples=500, ci=0.95, seed=42)
