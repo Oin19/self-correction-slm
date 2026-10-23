@@ -149,10 +149,27 @@ def run_apps_evaluation(
         )
 
         # Compute 95% Bootstrap Confidence Intervals
-        pass1_list = [1.0 if r.get("pass_at_1") else 0.0 for r in res.get("records", [])]
-        cumk_list = [1.0 if r.get(f"cumulative_success_at_{k}") else 0.0 for r in res.get("records", [])]
-        init_fails = [r for r in res.get("records", []) if not r.get("pass_at_1")]
-        condk_list = [1.0 if r.get(f"conditional_repair_at_{k}") else 0.0 for r in init_fails]
+        rec_list = res.get("records") or []
+        if not rec_list and os.path.isfile(out_jsonl):
+            with open(out_jsonl, "r", encoding="utf-8") as jf:
+                rec_list = [json.loads(line) for line in jf if line.strip()]
+
+        pass1_list = [
+            1.0 if (r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC")) else 0.0
+            for r in rec_list
+        ]
+        cumk_list = [
+            1.0 if (r.get(f"cumulative_success_at_{k}") or (isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] <= k) or (r.get("turn_history") and any(h.get("status") == "AC" for h in r["turn_history"][:k]))) else 0.0
+            for r in rec_list
+        ]
+        init_fails = [
+            r for r in rec_list
+            if not (r.get("pass_at_1") or (r.get("turn_history") and r["turn_history"][0].get("status") == "AC"))
+        ]
+        condk_list = [
+            1.0 if (r.get(f"conditional_repair_at_{k}") or (isinstance(r.get("solved_turn"), (int, float)) and r["solved_turn"] <= k) or (r.get("turn_history") and any(h.get("status") == "AC" for h in r["turn_history"][:k]))) else 0.0
+            for r in init_fails
+        ]
 
         p1_m, p1_l, p1_u = compute_bootstrap_ci(pass1_list, ci=0.95, seed=seed)
         cumk_m, cumk_l, cumk_u = compute_bootstrap_ci(cumk_list, ci=0.95, seed=seed)

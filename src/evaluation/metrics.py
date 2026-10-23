@@ -221,6 +221,7 @@ def evaluate(
         "mean_latency_per_problem": (sum(all_latencies) / num_evaluated) if num_evaluated else 0.0,
         "error_distribution": {k: v / num_evaluated for k, v in final_statuses.items()} if num_evaluated else {},
         "output_jsonl": output_jsonl,
+        "records": records,
     }
     return summary
 
