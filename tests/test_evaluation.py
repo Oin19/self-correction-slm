@@ -4,7 +4,13 @@ import json
 import os
 import tempfile
 import unittest
-from src.debugging.debug_loop import format_feedback_by_mode, sanitize_feedback_text, _execute
+from src.debugging.debug_loop import (
+    _execute,
+    _has_closed_code_fence,
+    _run_assertion_suite_fast,
+    format_feedback_by_mode,
+    sanitize_feedback_text,
+)
 from src.evaluation.metrics import (
     calculate_pass_at_1,
     calculate_fix_at_k,
@@ -128,6 +134,46 @@ class TestEvaluation(unittest.TestCase):
                 rows = [json.loads(line) for line in f if line.strip()]
             self.assertEqual(len(rows), 3)
             self.assertEqual(rows[1]["solved_turn"], 2)
+
+            # Verify resume=True skips already-evaluated problems in jsonl_path
+            called = []
+
+            def fail_if_recalled(model, tokenizer, problem, tests, K=3):
+                called.append(problem)
+                return trajectories[problem][:K]
+
+            resumed = evaluate(
+                None,
+                None,
+                dataset,
+                K=3,
+                label="DPO",
+                debug_loop_fn=fail_if_recalled,
+                output_jsonl=jsonl_path,
+                resume=True,
+            )
+            self.assertEqual(called, [])
+            self.assertAlmostEqual(resumed["fix_at_3"], 2 / 3)
+
+    def test_fence_stopping_and_fast_assertion_suite(self):
+        self.assertFalse(_has_closed_code_fence("def add(a, b):\n    return a + b\n"))
+        self.assertTrue(_has_closed_code_fence("def add(a, b):\n    return a + b\n```\nExplanation"))
+        self.assertFalse(_has_closed_code_fence("```python\ndef add(a, b):\n    return a + b\n"))
+        self.assertTrue(_has_closed_code_fence("```python\ndef add(a, b):\n    return a + b\n```"))
+
+        res_ac = _run_assertion_suite_fast("def add(a, b): return a + b", ["assert add(1, 2) == 3", "assert add(2, 2) == 4"])
+        self.assertEqual(res_ac.status, "AC")
+        self.assertEqual((res_ac.passed_tests, res_ac.total_tests), (2, 2))
+
+        res_wa = _run_assertion_suite_fast(
+            "def add(a, b): return a + b if a == 1 else 0",
+            ["assert add(1, 2) == 3", "assert add(2, 2) == 4"],
+        )
+        self.assertEqual(res_wa.status, "WA")
+        self.assertEqual((res_wa.passed_tests, res_wa.total_tests), (1, 2))
+
+        res_ce = _run_assertion_suite_fast("def add(a, b) return a + b", ["assert add(1, 2) == 3"])
+        self.assertEqual(res_ce.status, "CE")
 
 
 if __name__ == "__main__":

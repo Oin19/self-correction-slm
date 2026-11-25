@@ -5,7 +5,12 @@ import os
 import re
 import time
 from typing import Any, Dict, List, Optional
-from src.debugging.debug_loop import agentic_debug_loop
+from src.debugging.debug_loop import (
+    agentic_debug_loop,
+    agentic_loop_no_feedback,
+    agentic_loop_repeated_sampling,
+    batch_agentic_debug_loop,
+)
 from src.utils.test_cases import normalize_tests as extract_eval_test_cases
 
 
@@ -43,33 +48,43 @@ def evaluate(
     label: str = "",
     debug_loop_fn=None,
     output_jsonl: Optional[str] = None,
+    batch_size: int = 16,
+    max_new_tokens: int = 320,
+    feedback_mode: str = "F2",
+    resume: bool = False,
 ) -> dict:
-    """Compute Pass@1, Fix@K, and ConditionalRepair@K using explicit executable tests."""
-    debug_loop_fn = debug_loop_fn or agentic_debug_loop
+    """Compute Pass@1, Fix@K, and ConditionalRepair@K using batched GPU rollouts and executable tests."""
     total = len(dataset)
     pass1 = fixk = 0
-    fix_at = {1: 0, 3: 0, 5: 0, K: 0}
+    fix_at = {1: 0, 3: 0, 5: 0, 7: 0, K: 0}
     initial_failures = 0
-    repaired_by = {1: 0, 3: 0, 5: 0, K: 0}
+    repaired_by = {1: 0, 3: 0, 5: 0, 7: 0, K: 0}
     records: List[Dict[str, Any]] = []
+    completed_ids: Dict[str, Dict[str, Any]] = {}
 
     if output_jsonl:
         out_dir = os.path.dirname(os.path.abspath(output_jsonl))
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
-        if os.path.exists(output_jsonl):
+        if resume and os.path.exists(output_jsonl):
+            with open(output_jsonl, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        completed_ids[str(rec["problem_id"])] = rec
+                    except Exception:
+                        continue
+            if completed_ids:
+                print(f"{label}: Resumed {len(completed_ids)}/{total} already-evaluated problems from {output_jsonl}", flush=True)
+        elif os.path.exists(output_jsonl):
             os.remove(output_jsonl)
 
-    for i, example in enumerate(dataset):
-        tests = extract_eval_test_cases(example)
-        if not tests:
-            raise ValueError(f"No executable tests for evaluation example {i}; refusing to score it.")
-        problem = _format_problem_prompt(example)
-        problem_id = example.get("task_id", example.get("problem_id", i))
-        t0 = time.time()
-        history = debug_loop_fn(model, tokenizer, problem, tests, K=K)
-        elapsed = time.time() - t0
-        statuses = [h["result"]["status"] for h in history]
+    def _accumulate_record(rec: Dict[str, Any]) -> None:
+        nonlocal pass1, fixk, initial_failures
+        statuses = rec.get("statuses") or [h["result"]["status"] for h in rec.get("history", [])]
         first_ac = bool(statuses) and statuses[0] == "AC"
         any_ac = "AC" in statuses
         pass1 += int(first_ac)
@@ -80,31 +95,87 @@ def evaluate(
             initial_failures += 1
             for k_val in list(repaired_by.keys()):
                 repaired_by[k_val] += int("AC" in statuses[:k_val])
-
-        rec = {
-            "problem_id": problem_id,
-            "label": label,
-            "K": K,
-            "pass_at_1": first_ac,
-            "solved": any_ac,
-            "solved_turn": (statuses.index("AC") + 1) if any_ac else None,
-            "statuses": statuses,
-            "final_status": statuses[-1] if statuses else "CE",
-            "latency_sec": round(elapsed, 4),
-            "history": history,
-        }
         records.append(rec)
-        if output_jsonl:
-            with open(output_jsonl, "a", encoding="utf-8") as f:
-                f.write(json.dumps(rec) + "\n")
 
-        if (i + 1) % 5 == 0 or i + 1 == total:
-            cond_rep = (repaired_by[K] / initial_failures) if initial_failures else 0.0
-            print(
-                f"{label} [{i+1}/{total}] Pass@1={pass1/(i+1):.2%} "
-                f"Fix@{K}={fixk/(i+1):.2%} CondRepair@{K}={cond_rep:.2%}",
-                flush=True,
+    # Determine whether we can run fast batched GPU evaluation
+    use_batched = debug_loop_fn in (
+        None,
+        agentic_debug_loop,
+        agentic_loop_repeated_sampling,
+        agentic_loop_no_feedback,
+    )
+    eff_fb_mode = "F0" if debug_loop_fn is agentic_loop_repeated_sampling else feedback_mode
+    eff_fake_fb = debug_loop_fn is agentic_loop_no_feedback
+    eff_batch_size = max(1, int(batch_size)) if use_batched else 1
+
+    pending_items: List[Dict[str, Any]] = []
+    for i, example in enumerate(dataset):
+        tests = extract_eval_test_cases(example)
+        if not tests:
+            raise ValueError(f"No executable tests for evaluation example {i}; refusing to score it.")
+        problem = _format_problem_prompt(example)
+        problem_id = example.get("task_id", example.get("problem_id", i))
+        pid_key = str(problem_id)
+        if pid_key in completed_ids:
+            _accumulate_record(completed_ids[pid_key])
+        else:
+            pending_items.append({"idx": i, "problem_id": problem_id, "problem": problem, "tests": tests})
+
+    for start_idx in range(0, len(pending_items), eff_batch_size):
+        chunk = pending_items[start_idx : start_idx + eff_batch_size]
+        t0 = time.time()
+        if use_batched:
+            histories = batch_agentic_debug_loop(
+                model=model,
+                tokenizer=tokenizer,
+                problems=[it["problem"] for it in chunk],
+                test_cases_list=[it["tests"] for it in chunk],
+                K=K,
+                max_new_tokens=max_new_tokens,
+                feedback_mode=eff_fb_mode,
+                fake_feedback=eff_fake_fb,
             )
+        else:
+            histories = [
+                debug_loop_fn(model, tokenizer, it["problem"], it["tests"], K=K)
+                for it in chunk
+            ]
+        batch_elapsed = time.time() - t0
+        per_item_latency = round(batch_elapsed / max(1, len(chunk)), 4)
+
+        new_recs: List[Dict[str, Any]] = []
+        for it, history in zip(chunk, histories):
+            statuses = [h["result"]["status"] for h in history]
+            first_ac = bool(statuses) and statuses[0] == "AC"
+            any_ac = "AC" in statuses
+            rec = {
+                "problem_id": it["problem_id"],
+                "label": label,
+                "K": K,
+                "pass_at_1": first_ac,
+                "solved": any_ac,
+                "solved_turn": (statuses.index("AC") + 1) if any_ac else None,
+                "statuses": statuses,
+                "final_status": statuses[-1] if statuses else "CE",
+                "latency_sec": per_item_latency,
+                "history": history,
+            }
+            _accumulate_record(rec)
+            new_recs.append(rec)
+
+        if output_jsonl and new_recs:
+            with open(output_jsonl, "a", encoding="utf-8") as f:
+                for rec in new_recs:
+                    f.write(json.dumps(rec) + "\n")
+
+        done_n = len(records)
+        cond_rep = (repaired_by[K] / initial_failures) if initial_failures else 0.0
+        print(
+            f"{label} [{done_n}/{total}] Pass@1={pass1/done_n:.2%} "
+            f"Fix@{K}={fixk/done_n:.2%} CondRepair@{K}={cond_rep:.2%} "
+            f"({batch_elapsed:.1f}s/{len(chunk)} probs)",
+            flush=True,
+        )
 
     return {
         "label": label,
@@ -113,9 +184,11 @@ def evaluate(
         "fix_at_1": fix_at[1] / total if total else 0.0,
         "fix_at_3": fix_at[3] / total if total else 0.0,
         "fix_at_5": fix_at[5] / total if total else 0.0,
+        "fix_at_7": fix_at[7] / total if total else 0.0,
         f"conditional_repair_at_{K}": (repaired_by[K] / initial_failures) if initial_failures else 0.0,
         "conditional_repair_at_3": (repaired_by[3] / initial_failures) if initial_failures else 0.0,
         "conditional_repair_at_5": (repaired_by[5] / initial_failures) if initial_failures else 0.0,
+        "conditional_repair_at_7": (repaired_by[7] / initial_failures) if initial_failures else 0.0,
         "initial_failures": initial_failures,
         "total": total,
         "records": records,
