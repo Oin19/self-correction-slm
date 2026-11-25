@@ -1,56 +1,47 @@
 # Methodology
 
-## End-to-End Loop
+## End-to-End Execution-Guided Loop
 
-`problem → initial code → execute → feedback → correction → execute → ...`
+`problem → Turn 1 candidate (greedy) → sandbox execution → sanitized feedback → Turn 2..K repair (sampled) → sandbox execution`
 
-The model receives the programming problem and generates an initial solution. The generated code is executed in a sandbox. Execution feedback may include traceback, failed-test summary, and execution status. The model then generates a correction for the next turn.
+1. **Turn 1 (`Pass@1`)**: Given a programming problem statement (preserving top-level prompt imports for HumanEval and required function signatures for MBPP), the policy generates an initial Python solution using deterministic greedy decoding.
+2. **Sandbox Verification**: Candidate code is checked via `ast.parse` and executed in an isolated Python subprocess (`src/execution/executor.py`) against normalized unit tests (`src/utils/test_cases.py`) with wall-clock timeouts and memory bounds.
+3. **Sanitized Feedback Formatting**: Expected/oracle test values are redacted (`sanitize_feedback_text`), and feedback is formatted under one of four controlled granularity modes (`F0`–`F3`).
+4. **Iterative Repair (`Turns 2..K`)**: Unsolved problems enter batched repair rollouts (`temperature=1.0, top_p=0.95`, early-stopped immediately at the closing ```` ``` ```` code fence via `_FenceEosLogitsProcessor`) until all unit tests pass (`AC`) or the turn budget $K$ is exhausted.
 
-## Execution Status
+## Execution Status Taxonomy
 
-Track at minimum:
-- AC — Accepted
-- PE — Presentation/format issue where applicable
-- WA — Wrong Answer
-- TLE — Time Limit Exceeded
-- MLE — Memory Limit Exceeded
-- CE — Compilation/Syntax Error
-- RE — Runtime Error
+- `AC` — Accepted (all unit tests / output segments passed)
+- `WA` — Wrong Answer (one or more assertions / output checks failed)
+- `CE` — Compilation / Syntax / Indentation Error
+- `RE` — Runtime Exception (`IndexError`, `TypeError`, `NameError`, `ZeroDivisionError`, etc.)
+- `TLE` — Time Limit Exceeded
+- `MLE` — Memory Limit Exceeded
 
-## Reward Variants
+## Feedback Granularity Modes (`src/debugging/debug_loop.py`)
 
-Selected at train time via `reward_mode` on `run_ppo_training(...)`:
+- **`F0` (No Feedback / Repeated-Sampling Control `B1`)**: Re-prompts the original problem without execution status or error details under the identical turn and sampling budget.
+- **`F1` (Status-Only)**: Injects `Execution Status: <STATUS>` only.
+- **`F2` (Sanitized Traceback — Default)**: Injects bounded, oracle-redacted Python exception / assertion traceback text.
+- **`F3` (Structured Summary)**: Injects execution status, passed/total feedback check counts, and sanitized diagnostic text.
 
-- **`reward_mode="dense"`** (default; RQ3) — partial test-pass reward
-  - AC → `+1.0`
-  - Non-AC with `passed > 0` → `passed / total` (never discarded)
-  - WA/PE with `0` passed → `0.0`
-  - CE/RE/TLE/MLE (or empty suite) with `0` passed → `−0.2`
-  - Packed APPS multi-test stdin (`first line = T`): segment/line partial credit via `score_io_output` / `packed_tests=T`
-- **`reward_mode="binary"`** (RQ4 ablation only)
-  - AC → `+1.0`
-  - Any non-AC → `0.0` (no partial credit, no CE/RE penalty)
-- Execution-status-aware reward (exploratory)
-- Invalid/syntax output penalty (exploratory)
+## Training Arms & Matched Checkpoint Ancestry
 
-Both modes share the same sandbox tests (`normalize_tests`) so only the reward mapping differs between RQ3 and RQ4 arms. Checkpoints: `./checkpoints/ppo_dense/final` vs `./checkpoints/ppo_binary/final`; `ppo_metadata.json` records `reward_mode`, `seed`, and `commit_sha`.
+All trained arms use `deepseek-ai/deepseek-coder-1.3b-instruct` with LoRA (`r=16, lora_alpha=32, lora_dropout=0.05`, targets `q_proj, v_proj`, `3.15M` trainable parameters = `0.23%` of `1.350B`):
 
-DPO preference pairs are collected with the **same** `normalize_tests` harness (chosen = first AC turn; rejected = first CE/RE/WA/TLE/MLE turn within K=3).
+1. **`SFT Baseline` (`src/training/sft.py`)**: Supervised fine-tuning on `codeparrot/apps` (`train[:2000]`), `LR=2e-5`, `1` epoch, `seed=42`. Serves as the frozen parent checkpoint for all RL/preference arms.
+2. **`PPO-Dense` (`src/training/ppo.py`, `reward_mode="dense"`)**: Initialized from `SFT`:
+   - `AC` $\rightarrow +1.0$
+   - Non-`AC` with `passed > 0` $\rightarrow \text{passed} / \text{total}$ (including packed APPS multi-test I/O via `score_io_output`)
+   - `WA` with `0` passed $\rightarrow 0.0$
+   - `CE` / `RE` / `TLE` / `MLE` with `0` passed $\rightarrow -0.2$
+3. **`PPO-Binary` (`src/training/ppo.py`, `reward_mode="binary"`)**: Initialized from `SFT` with identical hyperparameters (`LR=2e-7, steps=100, init_KL=0.30, target_KL=4.0, seed=42`), rewarding `AC` $\rightarrow +1.0$ and all non-`AC` $\rightarrow 0.0$.
+4. **`Execution-DPO` (`src/training/dpo.py`)**: Initialized from the same `SFT` parent; preference pairs `(chosen, rejected)` are collected strictly from the SFT model's own execution-guided rollouts on APPS (`train[:500]`, `K=3`, no reference-solution fallback), trained with `beta=0.1, LR=5e-5, epochs=3, batch=4, seed=42`.
 
-## Baselines
+## Primary Evaluation Metrics (`src/evaluation/metrics.py`)
 
-- Zero-shot prompting
-- No-feedback debugging
-- True execution feedback
-- Random/incorrect feedback ablation
-- SFT
-- PPO
-- DPO
-
-## Controlled Variables
-
-Record model, dataset split, prompt format, sampling temperature, top-p, debugging turns, test budget, reward version, random seed, GPU, wall-clock time, and VRAM.
-
-## Evaluation
-
-Primary metrics are Pass@1, Fix@3, Fix@5, execution success, wall-clock time, VRAM usage, token usage where available, and reward stability.
+- **`Pass@1`**: Fraction of benchmark problems solved (`AC`) on Turn 1.
+- **`Fix@K` (`CumulativeSuccess@K`)**: Fraction of benchmark problems solved at or before Turn $K$ ($K \in \{1, 3, 5, 7\}$).
+- **`ConditionalRepair@K`**: Fraction of Turn-1 failures subsequently repaired to `AC` by Turn $K$:
+  $$\text{ConditionalRepair@}K = \frac{\text{Fix@}K - \text{Pass@}1}{1 - \text{Pass@}1}$$
+- **Per-Problem Trace Persistence**: Every run streams resumable JSONL trajectories (`problem_id`, `pass_at_1`, `solved_turn`, `statuses`, `latency_sec`, `history`) for paired statistical tests and failure-transition analysis.
