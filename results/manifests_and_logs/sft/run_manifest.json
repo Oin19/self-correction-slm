@@ -1,0 +1,21 @@
+{
+  "run_id": "sft_deepseek1.3b_apps2k_seed42",
+  "git_commit": "36c8055b19891eb279317d187acb5cc53e1848e5",
+  "model_id": "deepseek-ai/deepseek-coder-1.3b-instruct",
+  "parent_checkpoint": "deepseek-ai/deepseek-coder-1.3b-instruct",
+  "dataset_version": "codeparrot/apps@refs/convert/parquet:train[:2000]",
+  "seed": 42,
+  "method": "SFT",
+  "reward_mode": "N/A (supervised)",
+  "feedback_mode": "N/A (single-turn SFT)",
+  "turn_budget_K": 1,
+  "context_budget": 1024,
+  "decoding_config": {
+    "lr": 2e-05,
+    "epochs": 1,
+    "per_device_batch_size": 2,
+    "grad_accum": 4,
+    "global_steps": 250
+  },
+  "kaggle_url": "https://www.kaggle.com/code/rajdeepbhowmick/notebook4"
+}

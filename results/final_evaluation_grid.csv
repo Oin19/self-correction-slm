@@ -1,0 +1,16 @@
+Model,Checkpoint,K,HumanEval Pass@1,HumanEval Fix@K,HumanEval CondRepair@K,MBPP Pass@1,MBPP Fix@K,MBPP CondRepair@K
+Zero-Shot Base,deepseek-ai/deepseek-coder-1.3b-instruct,1,65.24%,65.24%,0.00%,39.00%,39.00%,0.00%
+Zero-Shot Base,deepseek-ai/deepseek-coder-1.3b-instruct,3,65.24%,70.12%,14.04%,39.00%,40.80%,2.95%
+Zero-Shot Base,deepseek-ai/deepseek-coder-1.3b-instruct,5,65.24%,71.95%,19.30%,39.00%,43.20%,6.89%
+SFT Baseline,/kaggle/input/notebooks/rjd2002/05-ppo-training/checkpoints/sft/final,1,60.98%,60.98%,0.00%,37.80%,37.80%,0.00%
+SFT Baseline,/kaggle/input/notebooks/rjd2002/05-ppo-training/checkpoints/sft/final,3,60.98%,63.41%,6.25%,37.80%,41.00%,5.14%
+SFT Baseline,/kaggle/input/notebooks/rjd2002/05-ppo-training/checkpoints/sft/final,5,60.98%,65.85%,12.50%,37.80%,43.00%,8.36%
+PPO-Dense Model,/kaggle/input/notebooks/rajdeepbhowmick/notebook5/checkpoints/ppo_dense/final,1,62.80%,62.80%,0.00%,38.00%,38.00%,0.00%
+PPO-Dense Model,/kaggle/input/notebooks/rajdeepbhowmick/notebook5/checkpoints/ppo_dense/final,3,62.80%,64.63%,4.92%,38.00%,41.00%,4.84%
+PPO-Dense Model,/kaggle/input/notebooks/rajdeepbhowmick/notebook5/checkpoints/ppo_dense/final,5,62.80%,65.85%,8.20%,38.00%,42.40%,7.10%
+PPO-Binary Model,/kaggle/input/notebooks/rjd2002/05-ppo-training/checkpoints/ppo_binary/final,1,60.37%,60.37%,0.00%,38.20%,38.20%,0.00%
+PPO-Binary Model,/kaggle/input/notebooks/rjd2002/05-ppo-training/checkpoints/ppo_binary/final,3,60.37%,65.24%,12.31%,38.20%,41.60%,5.50%
+PPO-Binary Model,/kaggle/input/notebooks/rjd2002/05-ppo-training/checkpoints/ppo_binary/final,5,60.37%,66.46%,15.38%,38.20%,43.20%,8.09%
+DPO Model,/kaggle/input/notebooks/rjd2002/notebook6-dpo/checkpoints/dpo/final,1,63.41%,63.41%,0.00%,39.20%,39.20%,0.00%
+DPO Model,/kaggle/input/notebooks/rjd2002/notebook6-dpo/checkpoints/dpo/final,3,63.41%,66.46%,8.33%,39.20%,42.20%,4.93%
+DPO Model,/kaggle/input/notebooks/rjd2002/notebook6-dpo/checkpoints/dpo/final,5,63.41%,68.90%,15.00%,39.20%,44.00%,7.89%

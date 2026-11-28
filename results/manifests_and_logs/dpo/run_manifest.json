@@ -1,0 +1,22 @@
+{
+  "run_id": "dpo_deepseek1.3b_apps500_pairs22_seed42",
+  "git_commit": "0052278a501eaa2f7d19260f8d6bba98f3feb73f",
+  "model_id": "deepseek-ai/deepseek-coder-1.3b-instruct",
+  "parent_checkpoint": "checkpoints/sft/checkpoint-250 (sft_deepseek1.3b_apps2k_seed42)",
+  "dataset_version": "codeparrot/apps@refs/convert/parquet:train[:500] -> 22 execution pairs",
+  "seed": 42,
+  "method": "DPO",
+  "reward_mode": "execution_preference_pairs (chosen=AC, rejected=non-AC, no_ref_fallback=True)",
+  "feedback_mode": "F2",
+  "turn_budget_K": 3,
+  "context_budget": 512,
+  "decoding_config": {
+    "beta": 0.1,
+    "lr": 5e-05,
+    "epochs": 3,
+    "batch_size": 4,
+    "num_pairs": 22,
+    "global_steps": 18
+  },
+  "kaggle_url": "https://www.kaggle.com/code/rjd2002/notebook6-dpo"
+}

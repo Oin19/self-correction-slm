@@ -1,0 +1,6 @@
+Condition,Pass@1,Fix@3,CondRepair@3
+F0 Repeated Sampling (No Feedback),63.41%,73.17%,26.67%
+F1 Status-Only Feedback,63.41%,67.68%,11.67%
+F2 Sanitized Traceback Feedback,63.41%,65.85%,6.67%
+F3 Structured Feedback,63.41%,65.24%,5.00%
+Random Fake Error Feedback,63.41%,67.68%,11.67%

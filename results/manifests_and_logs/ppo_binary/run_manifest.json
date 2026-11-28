@@ -1,0 +1,21 @@
+{
+  "run_id": "ppo_binary_deepseek1.3b_apps1k_seed42",
+  "git_commit": "36c8055b19891eb279317d187acb5cc53e1848e5",
+  "model_id": "deepseek-ai/deepseek-coder-1.3b-instruct",
+  "parent_checkpoint": "checkpoints/sft/final (sft_deepseek1.3b_apps2k_seed42)",
+  "dataset_version": "codeparrot/apps@refs/convert/parquet:train[:1000]",
+  "seed": 42,
+  "method": "PPO-Binary",
+  "reward_mode": "binary (execution_binary_ac_only)",
+  "feedback_mode": "F2",
+  "turn_budget_K": 1,
+  "context_budget": 512,
+  "decoding_config": {
+    "lr": 2e-07,
+    "max_steps": 100,
+    "batch_size": 2,
+    "init_kl_coef": 0.3,
+    "target_kl": 4.0
+  },
+  "kaggle_url": "https://www.kaggle.com/code/rjd2002/05-ppo-training"
+}

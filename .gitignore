@@ -9,12 +9,13 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data and generated outputs
-results/
+# Data and generated outputs (keep verification artifacts under results/ tracked)
 output*.md
 *.csv
 *.json
 *.log
+!results/
+!results/**
 
 # Model checkpoints and caches
 checkpoints/*/

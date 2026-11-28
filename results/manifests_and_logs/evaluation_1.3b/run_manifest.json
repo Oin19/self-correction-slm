@@ -1,0 +1,29 @@
+{
+  "run_id": "eval_full_1.3b_he164_mbpp500_seed42",
+  "git_commit": "b153dd5",
+  "model_id": "deepseek-ai/deepseek-coder-1.3b-instruct",
+  "parent_checkpoint": "All 5 matched arms (Base, SFT, PPO-Dense, PPO-Binary, DPO)",
+  "dataset_version": "openai/openai_humaneval:test(164) + google-research-datasets/mbpp:test(500)",
+  "seed": 42,
+  "method": "Full Benchmark Multi-Turn Evaluation & Ablations",
+  "reward_mode": "exact_unit_test_execution",
+  "feedback_mode": "F2 (main grid) + F0/F1/F2/F3/Fake (Step 3 ablations)",
+  "turn_budget_K": [
+    1,
+    3,
+    5,
+    7
+  ],
+  "context_budget": 512,
+  "decoding_config": {
+    "turn_1": "greedy (do_sample=False)",
+    "turn_2_to_K": {
+      "do_sample": true,
+      "temperature": 1.0,
+      "top_p": 0.95
+    },
+    "max_new_tokens": 320,
+    "fence_early_stop": true
+  },
+  "kaggle_url": "https://www.kaggle.com/code/rajdeepbhowmick/notebook7-2"
+}

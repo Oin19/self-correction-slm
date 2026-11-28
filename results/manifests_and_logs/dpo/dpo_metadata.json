@@ -1,0 +1,15 @@
+{
+  "checkpoint_type": "dpo_execution_grounded",
+  "preference_source": "model_generated_execution_rollouts",
+  "reference_solution_fallback": false,
+  "test_harness": "normalize_tests",
+  "seed": 42,
+  "commit_sha": "0052278a501eaa2f7d19260f8d6bba98f3feb73f",
+  "beta": 0.1,
+  "learning_rate": 5e-05,
+  "num_train_epochs": 3,
+  "per_device_train_batch_size": 4,
+  "num_preference_pairs": 22,
+  "preference_split": "train[:500]",
+  "debug_turns_k": 3
+}

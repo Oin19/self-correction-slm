@@ -1,0 +1,16 @@
+{
+  "base_model": "deepseek-ai/deepseek-coder-1.3b-instruct",
+  "checkpoint_type": "ppo_policy_adapter",
+  "reward_mode": "binary",
+  "reward_type": "execution_binary_ac_only",
+  "execution_tests_required": true,
+  "seed": 42,
+  "commit_sha": "36c8055b19891eb279317d187acb5cc53e1848e5",
+  "max_steps": 100,
+  "learning_rate": 2e-07,
+  "init_kl_coef": 0.3,
+  "target_kl": 4.0,
+  "batch_size": 2,
+  "trainable_parameters": 3147777,
+  "total_parameters": 1349619713
+}
